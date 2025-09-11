@@ -1,4 +1,3 @@
-```
 # **Project Requirements Document (PRD)**
 
 ## **AI-Powered LMS Module**
@@ -304,4 +303,4 @@ The project will be considered complete when all core features (FC-01 to FC-05) 
 | --- | --- | --- | --- | --- |
 | **8** | Nov 1 - Nov 7 | **Final Submission & Polish** (100%) | \- Finalize all features, fix all P0/P1 bugs.<br><br>\- Conduct thorough E2E, performance, and usability testing.<br><br>\- Prepare documentation and final presentation. | **All:** Testing, Bug Fixing, Documentation |
 | --- | --- | --- | --- | --- |
-```
+
