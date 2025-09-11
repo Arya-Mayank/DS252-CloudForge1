@@ -19,7 +19,7 @@ Educators and students using traditional Learning Management Systems face signif
 
 For students, the learning experience is often generic and one-size-fits-all. They lack personalized feedback, struggle to identify their specific knowledge gaps, and receive study materials that are not tailored to their unique learning needs. This results in inefficient studying and disengagement. Our project aims to solve these problems by introducing an intelligent layer on top of existing LMS platforms (like Moodle) that automates content structuring, generates personalized assessments, and provides adaptive learning paths.
 
-### **2\. Objectives & Goals**
+### **2\. Purpose**
 
 The primary objective is to develop a Moodle plugin which leverages AI to streamline teaching and learning by automating exam evaluation, generating personalized feedback, and assisting educators in creating question banks aligned with the course curriculum. The system adapts to each student’s level of understanding, highlights mistakes, and provides corrective guidance, while also reducing instructor workload through intelligent question bank generation.
 
@@ -55,7 +55,7 @@ The primary objective is to develop a Moodle plugin which leverages AI to stream
 |     | **No Progress Visibility:** Lacks a clear, historical view of their learning journey, including past mistakes and improvements. |
 | --- | --- |
 
-### **5\. Core Features**
+### **5\. Scope**
 
 **FC-01: AI-Powered Course Assessment Generation**
 
@@ -141,7 +141,7 @@ The primary objective is to develop a Moodle plugin which leverages AI to stream
 
 The system will be designed as a Moodle plugin that communicates with a separate, containerized backend microservice responsible for all AI processing. This decouples the AI logic from the Moodle monolith, allowing for independent scaling, updating, and maintenance.
 
-#### **1.1. Architectural Diagram**
+#### **1.1. Proposed Architecture**
 
 **Flow Description:**
 
@@ -152,6 +152,8 @@ The system will be designed as a Moodle plugin that communicates with a separate
 5. **Embedding & Vector Storage:** These chunks are converted into vector embeddings using a sentence-transformer model. The embeddings and their corresponding text are stored in a **Milvus** vector database.
 6. **LLM Interaction:** For tasks like syllabus generation, question creation, or RAG-based recommendations, the backend service formats a prompt and sends it to a powerful LLM (e.g., OpenAI's GPT-4 or Anthropic's Claude 3) via its API.
 7. **Data Storage:** Structured data (syllabus, question banks, and user performance) is stored in a PostgreSQL database. Raw uploaded documents are stored in an S3-compatible object store.
+
+#### **1.2. Technology Stack**
 
 | **Component** | **Category** | **Technology Choice** | **Purpose & Justification** |
 | --- | --- | --- | --- |
