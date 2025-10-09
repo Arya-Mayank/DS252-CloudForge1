@@ -1,0 +1,52 @@
+# Alternative: Direct Azure deployment without CI checks
+
+name: Deploy to Azure
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install and Build Backend
+        working-directory: ./backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./backend
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure App Settings
+        run: |
+          az webapp config appsettings set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --settings \
+              NODE_ENV=production \
+              SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+              SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+
