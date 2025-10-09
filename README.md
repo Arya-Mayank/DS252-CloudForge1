@@ -2,6 +2,9 @@
 
 A modern, full-stack Learning Management System (LMS) with AI-powered features for automated syllabus generation, assessment creation, and personalized learning feedback.
 
+**Course**: DS252: Introduction to Cloud Computing at CDS, IISc  
+**Team**: ZeroDownTime
+
 ## 🚀 Features
 
 ### Core Functionality
@@ -306,4 +309,4 @@ For support and questions:
 
 ---
 
-**Built with ❤️ by the DoodleOnMoodle Team**
+**Built with ❤️ by Team ZeroDownTime for DS252: Introduction to Cloud Computing**
