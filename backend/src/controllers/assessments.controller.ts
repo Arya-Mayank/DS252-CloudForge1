@@ -16,7 +16,7 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { courseId, title, description, subtopics, timeLimit, passingScore } = req.body;
+    const { courseId, title, description, subtopics, timeLimit, passingScore, difficultyDistribution, quizLevel } = req.body;
 
     // Validate required fields
     if (!courseId || !title || !subtopics || !Array.isArray(subtopics) || subtopics.length === 0) {
@@ -82,7 +82,9 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
     
     const { questions } = await azureOpenAIService.generateQuestionsForAssessment({
       subtopics: enrichedSubtopics,
-      courseContext: course.description || undefined
+      courseContext: course.description || undefined,
+      difficultyDistribution: difficultyDistribution || undefined,
+      quizLevel: quizLevel || 'UG'
     });
 
     console.log(`✅ Generated ${questions.length} questions`);
@@ -114,6 +116,7 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
         points: q.points,
         explanation: q.explanation,
         difficulty: q.difficulty,
+        bloom_level: q.bloom_level,
         options: mappedOptions
       });
 
@@ -350,6 +353,66 @@ export const deleteAssessment = async (req: AuthRequest, res: Response): Promise
   } catch (error) {
     console.error('Delete assessment error:', error);
     res.status(500).json({ error: 'Failed to delete assessment' });
+  }
+};
+
+/**
+ * Save selected questions from an assessment to the question bank
+ * POST /api/assessments/:id/save-to-bank
+ */
+export const saveQuestionsToBank = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { questionIds } = req.body;
+
+    if (!questionIds || !Array.isArray(questionIds) || questionIds.length === 0) {
+      res.status(400).json({ error: 'Missing or invalid questionIds array' });
+      return;
+    }
+
+    // Get assessment to verify ownership and get course_id
+    const assessment = await assessmentModel.findById(id);
+    if (!assessment) {
+      res.status(404).json({ error: 'Assessment not found' });
+      return;
+    }
+
+    // Verify user is the instructor
+    const course = await courseModel.findById(assessment.course_id);
+    if (!course || course.instructor_id !== req.user.id) {
+      res.status(403).json({ error: 'You can only save questions from your own assessments' });
+      return;
+    }
+
+    // Save each question to the bank
+    const savedQuestions = [];
+    for (const questionId of questionIds) {
+      try {
+        const bankQuestion = await assessmentModel.saveToQuestionBank(questionId, assessment.course_id);
+        savedQuestions.push(bankQuestion);
+      } catch (error) {
+        console.error(`Error saving question ${questionId} to bank:`, error);
+        // Continue with other questions
+      }
+    }
+
+    res.status(201).json({
+      message: `Saved ${savedQuestions.length} question(s) to question bank`,
+      savedCount: savedQuestions.length,
+      totalRequested: questionIds.length
+    });
+
+  } catch (error) {
+    console.error('Save questions to bank error:', error);
+    res.status(500).json({ 
+      error: 'Failed to save questions to bank',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 };
 

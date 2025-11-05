@@ -6,6 +6,7 @@ export interface Topic {
   title: string;
   description?: string;
   order_index: number;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -17,6 +18,7 @@ export interface Subtopic {
   description?: string;
   order_index: number;
   learning_objectives?: string[];
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | null;
   created_at?: string;
 }
 
@@ -66,7 +68,8 @@ class TopicModel {
     const topicsToCreate = syllabusItems.map((item, index) => ({
       course_id: courseId,
       title: item.topic,
-      order_index: index
+      order_index: index,
+      bloom_level: item.bloom_level || null
     }));
 
     const { data, error } = await supabase
@@ -84,7 +87,13 @@ class TopicModel {
       const syllabusItem = syllabusItems[i];
       
       if (syllabusItem.subtopics && Array.isArray(syllabusItem.subtopics)) {
-        await this.createSubtopicsForTopic(topic.id, syllabusItem.subtopics);
+        // Handle both string arrays and object arrays with bloom_level
+        const subtopicData = syllabusItem.subtopics.map((st: any) => 
+          typeof st === 'string' 
+            ? { title: st }
+            : { title: st.subtopic || st.title, bloom_level: st.bloom_level }
+        );
+        await this.createSubtopicsForTopic(topic.id, subtopicData);
       }
     }
 
@@ -169,13 +178,17 @@ class TopicModel {
     return data;
   }
 
-  async createSubtopicsForTopic(topicId: string, subtopicTitles: string[]): Promise<Subtopic[]> {
+  async createSubtopicsForTopic(
+    topicId: string, 
+    subtopicData: Array<{ title: string; bloom_level?: string } | string>
+  ): Promise<Subtopic[]> {
     const supabase = getSupabaseClient();
     
-    const subtopicsToCreate = subtopicTitles.map((title, index) => ({
+    const subtopicsToCreate = subtopicData.map((item, index) => ({
       topic_id: topicId,
-      title,
+      title: typeof item === 'string' ? item : item.title,
       order_index: index,
+      bloom_level: typeof item === 'object' && item.bloom_level ? item.bloom_level : null
     }));
 
     const { data, error } = await supabase

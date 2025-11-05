@@ -86,6 +86,18 @@ router.delete(
   assessmentsController.deleteAssessment
 );
 
+/**
+ * @route   POST /api/assessments/:id/save-to-bank
+ * @desc    Save selected questions from assessment to question bank
+ * @access  Private (Instructor only)
+ */
+router.post(
+  '/:id/save-to-bank',
+  authenticateToken,
+  requireInstructor,
+  assessmentsController.saveQuestionsToBank
+);
+
 export default router;
 
 

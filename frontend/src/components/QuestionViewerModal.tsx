@@ -16,6 +16,8 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
+  const [savingToBank, setSavingToBank] = useState(false);
 
   useEffect(() => {
     if (isOpen && assessment.id) {
@@ -55,6 +57,46 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
     }
   };
 
+  const getBloomLevelColor = (level?: string) => {
+    switch (level) {
+      case 'REMEMBER': return 'bg-gray-100 text-gray-700';
+      case 'UNDERSTAND': return 'bg-blue-100 text-blue-700';
+      case 'APPLY': return 'bg-green-100 text-green-700';
+      case 'ANALYZE': return 'bg-yellow-100 text-yellow-700';
+      case 'EVALUATE': return 'bg-orange-100 text-orange-700';
+      case 'CREATE': return 'bg-purple-100 text-purple-700';
+      default: return 'bg-gray-100 text-gray-600';
+    }
+  };
+
+  const handleQuestionSelect = (questionId: string) => {
+    const newSelected = new Set(selectedQuestions);
+    if (newSelected.has(questionId)) {
+      newSelected.delete(questionId);
+    } else {
+      newSelected.add(questionId);
+    }
+    setSelectedQuestions(newSelected);
+  };
+
+  const handleSaveToBank = async () => {
+    if (selectedQuestions.size === 0) return;
+
+    setSavingToBank(true);
+    try {
+      const questionIds = Array.from(selectedQuestions);
+      await assessmentsAPI.saveToQuestionBank(assessment.id, questionIds);
+      
+      alert(`Successfully saved ${questionIds.length} question(s) to question bank!`);
+      setSelectedQuestions(new Set());
+    } catch (error: any) {
+      console.error('Error saving questions to bank:', error);
+      alert(error.response?.data?.error || 'Failed to save questions to bank');
+    } finally {
+      setSavingToBank(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -70,6 +112,11 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
               </p>
             </div>
             <div className="flex items-center space-x-3">
+              {selectedQuestions.size > 0 && (
+                <span className="text-sm text-primary-100">
+                  {selectedQuestions.size} selected
+                </span>
+              )}
               <button
                 onClick={() => setShowAnswers(!showAnswers)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -131,10 +178,18 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
           ) : (
             <div className="p-6 space-y-6">
               {questions.map((question, index) => (
-                <div key={question.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                <div key={question.id} className={`bg-white border rounded-lg p-6 shadow-sm ${
+                  selectedQuestions.has(question.id) ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200'
+                }`}>
                   {/* Question Header */}
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedQuestions.has(question.id)}
+                        onChange={() => handleQuestionSelect(question.id)}
+                        className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                      />
                       <div className="bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm font-medium">
                         Q{question.question_number}
                       </div>
@@ -144,6 +199,11 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
                       {question.difficulty && (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(question.difficulty)}`}>
                           {question.difficulty}
+                        </span>
+                      )}
+                      {question.bloom_level && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getBloomLevelColor(question.bloom_level)}`}>
+                          {question.bloom_level}
                         </span>
                       )}
                       <span className="text-sm text-gray-500">
@@ -243,6 +303,15 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
               )}
             </div>
             <div className="flex items-center space-x-3">
+              {selectedQuestions.size > 0 && (
+                <button
+                  onClick={handleSaveToBank}
+                  disabled={savingToBank}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingToBank ? 'Saving...' : `Save ${selectedQuestions.size} to Bank`}
+                </button>
+              )}
               <button
                 onClick={() => setShowAnswers(!showAnswers)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

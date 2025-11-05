@@ -29,6 +29,7 @@ export interface Question {
   points: number;
   explanation?: string | null;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD' | null;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -71,6 +72,30 @@ export interface StudentAnswer {
   updated_at?: string;
 }
 
+export interface QuestionBank {
+  id?: string;
+  course_id: string;
+  topic_id?: string | null;
+  subtopic_id?: string | null;
+  question_type: 'MCQ' | 'MSQ' | 'SUBJECTIVE';
+  question_text: string;
+  points: number;
+  explanation?: string | null;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD' | null;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface QuestionBankOption {
+  id?: string;
+  question_bank_id: string;
+  option_text: string;
+  option_label: string;
+  is_correct: boolean;
+  created_at?: string;
+}
+
 export interface CreateAssessmentParams {
   course_id: string;
   instructor_id: string;
@@ -90,6 +115,7 @@ export interface CreateQuestionParams {
   points: number;
   explanation?: string;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
   options?: Array<{
     option_label: string;
     option_text: string;
@@ -104,6 +130,8 @@ class AssessmentModel {
   private topicsJunctionTable = 'assessment_topics';
   private attemptsTable = 'student_attempts';
   private answersTable = 'student_answers';
+  private questionBankTable = 'question_bank';
+  private questionBankOptionsTable = 'question_bank_options';
 
   /**
    * Create a new assessment
@@ -248,7 +276,8 @@ class AssessmentModel {
         question_number: params.question_number,
         points: params.points,
         explanation: params.explanation,
-        difficulty: params.difficulty
+        difficulty: params.difficulty,
+        bloom_level: params.bloom_level
       })
       .select()
       .single();
@@ -635,6 +664,206 @@ class AssessmentModel {
       // Default to incorrect if evaluation fails
       return false;
     }
+  }
+
+  /**
+   * Save a question to the question bank
+   */
+  async saveToQuestionBank(
+    questionId: string,
+    courseId: string
+  ): Promise<QuestionBank> {
+    const supabase = getSupabaseClient();
+
+    // Get the question with its assessment_id first
+    const { data: questionData } = await supabase
+      .from(this.questionsTable)
+      .select('assessment_id')
+      .eq('id', questionId)
+      .single();
+
+    if (!questionData) {
+      throw new Error('Question not found');
+    }
+
+    // Get the question with options
+    const questions = await this.getQuestions(questionData.assessment_id);
+    const question = questions.find(q => q.id === questionId);
+    
+    if (!question) {
+      throw new Error('Question not found');
+    }
+
+    // Create question in bank
+    const { data: bankQuestion, error: bankError } = await supabase
+      .from(this.questionBankTable)
+      .insert({
+        course_id: courseId,
+        topic_id: question.topic_id,
+        subtopic_id: question.subtopic_id,
+        question_type: question.question_type,
+        question_text: question.question_text,
+        points: question.points,
+        explanation: question.explanation,
+        difficulty: question.difficulty,
+        bloom_level: question.bloom_level
+      })
+      .select()
+      .single();
+
+    if (bankError) throw new Error(`Failed to save question to bank: ${bankError.message}`);
+
+    // Copy options if they exist
+    if (question.options && question.options.length > 0) {
+      const optionsToInsert = question.options.map(opt => ({
+        question_bank_id: bankQuestion.id,
+        option_label: opt.option_label,
+        option_text: opt.option_text,
+        is_correct: opt.is_correct
+      }));
+
+      const { error: optionsError } = await supabase
+        .from(this.questionBankOptionsTable)
+        .insert(optionsToInsert);
+
+      if (optionsError) throw new Error(`Failed to save question options to bank: ${optionsError.message}`);
+    }
+
+    return bankQuestion;
+  }
+
+  /**
+   * Get questions from bank with filters
+   */
+  async getQuestionsFromBank(
+    courseId: string,
+    filters: {
+      difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+      bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
+      question_type?: 'MCQ' | 'MSQ' | 'SUBJECTIVE';
+      topic_id?: string;
+      subtopic_id?: string;
+    } = {}
+  ): Promise<Array<QuestionBank & { options?: QuestionBankOption[] }>> {
+    const supabase = getSupabaseClient();
+
+    let query = supabase
+      .from(this.questionBankTable)
+      .select('*')
+      .eq('course_id', courseId);
+
+    if (filters.difficulty) {
+      query = query.eq('difficulty', filters.difficulty);
+    }
+    if (filters.bloom_level) {
+      query = query.eq('bloom_level', filters.bloom_level);
+    }
+    if (filters.question_type) {
+      query = query.eq('question_type', filters.question_type);
+    }
+    if (filters.topic_id) {
+      query = query.eq('topic_id', filters.topic_id);
+    }
+    if (filters.subtopic_id) {
+      query = query.eq('subtopic_id', filters.subtopic_id);
+    }
+
+    const { data: questions, error } = await query;
+
+    if (error) throw new Error(`Failed to fetch questions from bank: ${error.message}`);
+    if (!questions) return [];
+
+    // Get options for all questions
+    const questionsWithOptions = await Promise.all(
+      questions.map(async (question) => {
+        const { data: options } = await supabase
+          .from(this.questionBankOptionsTable)
+          .select('*')
+          .eq('question_bank_id', question.id)
+          .order('option_label', { ascending: true });
+
+        return {
+          ...question,
+          options: options || []
+        };
+      })
+    );
+
+    return questionsWithOptions;
+  }
+
+  /**
+   * Get next adaptive question based on current performance
+   */
+  async getAdaptiveQuestion(
+    courseId: string,
+    currentDifficulty: 'EASY' | 'MEDIUM' | 'HARD',
+    wasCorrect: boolean,
+    filters: {
+      question_type?: 'MCQ' | 'MSQ' | 'SUBJECTIVE';
+      topic_id?: string;
+      subtopic_id?: string;
+      excludeIds?: string[];
+    } = {}
+  ): Promise<(QuestionBank & { options?: QuestionBankOption[] }) | null> {
+    // Adaptive logic: correct → increase difficulty, wrong → decrease
+    let targetDifficulty: 'EASY' | 'MEDIUM' | 'HARD';
+    
+    if (wasCorrect) {
+      // Increase difficulty
+      if (currentDifficulty === 'EASY') {
+        targetDifficulty = 'MEDIUM';
+      } else if (currentDifficulty === 'MEDIUM') {
+        targetDifficulty = 'HARD';
+      } else {
+        targetDifficulty = 'HARD'; // Already at max
+      }
+    } else {
+      // Decrease difficulty
+      if (currentDifficulty === 'HARD') {
+        targetDifficulty = 'MEDIUM';
+      } else if (currentDifficulty === 'MEDIUM') {
+        targetDifficulty = 'EASY';
+      } else {
+        targetDifficulty = 'EASY'; // Already at min
+      }
+    }
+
+    // Try to get a question at target difficulty
+    const questions = await this.getQuestionsFromBank(courseId, {
+      difficulty: targetDifficulty,
+      question_type: filters.question_type,
+      topic_id: filters.topic_id,
+      subtopic_id: filters.subtopic_id
+    });
+
+    // Filter out excluded questions
+    const availableQuestions = questions.filter(q => 
+      !filters.excludeIds || !filters.excludeIds.includes(q.id!)
+    );
+
+    if (availableQuestions.length === 0) {
+      // Fallback: try any difficulty within the same course
+      const allQuestions = await this.getQuestionsFromBank(courseId, {
+        question_type: filters.question_type,
+        topic_id: filters.topic_id,
+        subtopic_id: filters.subtopic_id
+      });
+      
+      const fallbackQuestions = allQuestions.filter(q => 
+        !filters.excludeIds || !filters.excludeIds.includes(q.id!)
+      );
+
+      if (fallbackQuestions.length === 0) {
+        return null;
+      }
+
+      // Return random question from fallback
+      return fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
+    }
+
+    // Return random question at target difficulty
+    return availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
   }
 }
 

@@ -18,7 +18,7 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { courseId, documentText } = req.body;
+    const { courseId, documentText, updateExisting } = req.body;
 
     if (!courseId) {
       res.status(400).json({ error: 'Course ID is required' });
@@ -78,7 +78,14 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
     console.log(`🤖 Generating syllabus from ${textToAnalyze.length} characters of content`);
     
     // Generate syllabus using Azure OpenAI
-    const syllabus = await azureOpenAIService.generateSyllabus(textToAnalyze);
+    // If updating existing syllabus and course has one, merge intelligently
+    let syllabus;
+    if (updateExisting && course.syllabus && Array.isArray(course.syllabus) && course.syllabus.length > 0) {
+      console.log('📝 Updating existing syllabus with new content...');
+      syllabus = await azureOpenAIService.updateSyllabus(textToAnalyze, course.syllabus);
+    } else {
+      syllabus = await azureOpenAIService.generateSyllabus(textToAnalyze);
+    }
 
     // Update course with generated syllabus
     await courseModel.update(courseId, { syllabus });
@@ -96,8 +103,9 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
     await azureSearchService.indexDocument(documentChunks);
 
     res.json({
-      message: 'Syllabus generated successfully',
-      syllabus
+      message: updateExisting ? 'Syllabus updated successfully' : 'Syllabus generated successfully',
+      syllabus,
+      isUpdate: updateExisting || false
     });
   } catch (error) {
     console.error('Generate syllabus error:', error);

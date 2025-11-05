@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS topics (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     order_index INTEGER NOT NULL DEFAULT 0,
+    bloom_level VARCHAR(20) CHECK (bloom_level IN ('REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS subtopics (
     description TEXT,
     order_index INTEGER NOT NULL DEFAULT 0,
     learning_objectives TEXT[],
+    bloom_level VARCHAR(20) CHECK (bloom_level IN ('REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -49,7 +51,9 @@ CREATE TABLE IF NOT EXISTS student_topic_performance (
 -- Indexes for performance
 CREATE INDEX idx_topics_course ON topics(course_id);
 CREATE INDEX idx_topics_order ON topics(course_id, order_index);
+CREATE INDEX idx_topics_bloom ON topics(bloom_level);
 CREATE INDEX idx_subtopics_topic ON subtopics(topic_id);
+CREATE INDEX idx_subtopics_bloom ON subtopics(bloom_level);
 CREATE INDEX idx_question_topics_question ON question_topics(question_id);
 CREATE INDEX idx_question_topics_topic ON question_topics(topic_id);
 CREATE INDEX idx_student_topic_perf_student ON student_topic_performance(student_id);

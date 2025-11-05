@@ -11,10 +11,10 @@ import authRoutes from './routes/auth.routes';
 import coursesRoutes from './routes/courses.routes';
 import aiRoutes from './routes/ai.routes';
 import analyticsRoutes from './routes/analytics.routes';
-import testRoutes from './routes/test.routes';
 import assessmentsRoutes from './routes/assessments.routes';
 import aiFeedbackRoutes from './routes/ai-feedback.routes';
 import studentAssessmentsRoutes from './routes/student-assessments.routes';
+import questionBankRoutes from './routes/question-bank.routes';
 
 // Create Express app
 const app: Application = express();
@@ -57,10 +57,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/test', testRoutes);
 app.use('/api/assessments', assessmentsRoutes);
 app.use('/api/ai/feedback', aiFeedbackRoutes);
 app.use('/api/student/assessments', studentAssessmentsRoutes);
+app.use('/api/question-bank', questionBankRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

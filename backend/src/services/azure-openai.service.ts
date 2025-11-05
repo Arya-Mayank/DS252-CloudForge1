@@ -10,7 +10,8 @@ import { getOpenAIClient, getDeploymentName, isAzureMockMode } from '../config/a
 
 export interface SyllabusItem {
   topic: string;
-  subtopics: string[];
+  subtopics: Array<string | { subtopic: string; bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' }>;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
 }
 
 export interface Question {
@@ -21,6 +22,7 @@ export interface Question {
   correctAnswer: string;
   difficulty: 'easy' | 'medium' | 'hard';
   topic: string;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
 }
 
 export interface Recommendation {
@@ -51,7 +53,7 @@ class AzureOpenAIService {
       console.log(`📊 Analyzing ${contentToAnalyze.length} characters`);
       console.log(`📝 Content preview: ${contentToAnalyze.substring(0, 100)}...`);
       
-      const prompt = `Analyze the following course document and create a structured syllabus with topics and subtopics.
+      const prompt = `Analyze the following course document and create a structured syllabus with topics and subtopics. You may optionally suggest Bloom's Taxonomy levels, but they will be set by the instructor.
 
 Document:
 ${contentToAnalyze}
@@ -60,9 +62,24 @@ Return a JSON array of syllabus items with this structure:
 [
   {
     "topic": "Topic Name",
-    "subtopics": ["Subtopic 1", "Subtopic 2", "Subtopic 3"]
+    "bloom_level": "REMEMBER|UNDERSTAND|APPLY|ANALYZE|EVALUATE|CREATE" (optional),
+    "subtopics": [
+      "Subtopic 1",
+      {"subtopic": "Subtopic 2", "bloom_level": "APPLY"} (bloom_level is optional),
+      ...
+    ]
   }
 ]
+
+Bloom's Taxonomy Levels (optional suggestions):
+- REMEMBER: Recalling facts, concepts
+- UNDERSTAND: Explaining ideas or concepts
+- APPLY: Using information in new situations
+- ANALYZE: Drawing connections among ideas
+- EVALUATE: Justifying a stand or decision
+- CREATE: Producing new or original work
+
+Note: Bloom's taxonomy levels are optional. You may suggest them, but instructors will set them manually in the UI.
 
 Important: Return ONLY the JSON array, no additional text.`;
 
@@ -90,6 +107,86 @@ Important: Return ONLY the JSON array, no additional text.`;
     } catch (error) {
       console.error('Error calling Azure OpenAI:', error);
       return this.getMockSyllabus(documentText);
+    }
+  }
+
+  /**
+   * Update existing syllabus with new content, intelligently merging
+   */
+  async updateSyllabus(newDocumentText: string, existingSyllabus: SyllabusItem[]): Promise<SyllabusItem[]> {
+    const client = getOpenAIClient();
+
+    if (isAzureMockMode() || !client) {
+      console.log('📝 Using MOCK syllabus update');
+      // For mock mode, combine existing with mock new content
+      const newSyllabus = this.getMockSyllabus(newDocumentText);
+      return [...existingSyllabus, ...newSyllabus];
+    }
+
+    try {
+      const deployment = getDeploymentName();
+      const contentToAnalyze = newDocumentText.substring(0, 3000);
+      const existingSyllabusStr = JSON.stringify(existingSyllabus, null, 2);
+      
+      console.log(`🤖 Updating syllabus with new content (${contentToAnalyze.length} chars)`);
+      
+      const prompt = `You are updating an existing course syllabus with new material. Analyze the new document content and intelligently merge it with the existing syllabus.
+
+Existing Syllabus:
+${existingSyllabusStr}
+
+New Document Content:
+${contentToAnalyze}
+
+Instructions:
+1. Preserve existing topics that are still relevant
+2. Add new topics from the new content
+3. Update subtopics within existing topics if new information is provided
+4. Remove or mark outdated content if replaced by new material
+5. Maintain the same structure and Bloom's taxonomy levels
+6. Ensure topics flow logically and don't duplicate
+
+Return a JSON array with the updated syllabus structure:
+[
+  {
+    "topic": "Topic Name",
+    "bloom_level": "REMEMBER|UNDERSTAND|APPLY|ANALYZE|EVALUATE|CREATE",
+    "subtopics": [
+      "Subtopic 1",
+      {"subtopic": "Subtopic 2", "bloom_level": "APPLY"},
+      ...
+    ]
+  }
+]
+
+Important: Return ONLY the JSON array, no additional text. Make sure the syllabus is comprehensive and includes both old and new relevant content.`;
+
+      const response = await client.getChatCompletions(
+        deployment,
+        [
+          { role: 'system', content: 'You are an expert curriculum designer. Intelligently merge existing and new syllabus content. Return only valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        {
+          maxCompletionTokens: 2000
+        } as any
+      );
+
+      const content = response.choices[0]?.message?.content || '[]';
+      console.log(`✅ Received updated syllabus from Azure OpenAI`);
+      console.log(`📊 Tokens used: ${JSON.stringify(response.usage)}`);
+      
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      const parsedSyllabus = jsonMatch ? JSON.parse(jsonMatch[0]) : existingSyllabus;
+      
+      console.log(`✅ Updated syllabus with ${parsedSyllabus.length} items (was ${existingSyllabus.length})`);
+      
+      return parsedSyllabus;
+    } catch (error) {
+      console.error('Error updating syllabus with Azure OpenAI:', error);
+      // Fallback: combine existing with new mock content
+      const newSyllabus = this.getMockSyllabus(newDocumentText);
+      return [...existingSyllabus, ...newSyllabus];
     }
   }
 
@@ -206,23 +303,48 @@ Return a JSON array with this structure:
     return [
       {
         topic: hasIntro ? 'Introduction' : 'Course Overview',
-        subtopics: ['Course objectives', 'Prerequisites', 'Learning outcomes']
+        bloom_level: 'REMEMBER',
+        subtopics: [
+          'Course objectives',
+          { subtopic: 'Prerequisites', bloom_level: 'UNDERSTAND' },
+          'Learning outcomes'
+        ]
       },
       {
         topic: 'Core Concepts',
-        subtopics: ['Fundamental principles', 'Key terminology', 'Basic operations']
+        bloom_level: 'UNDERSTAND',
+        subtopics: [
+          'Fundamental principles',
+          { subtopic: 'Key terminology', bloom_level: 'REMEMBER' },
+          { subtopic: 'Basic operations', bloom_level: 'APPLY' }
+        ]
       },
       {
         topic: 'Advanced Topics',
-        subtopics: ['Complex applications', 'Best practices', 'Case studies']
+        bloom_level: 'ANALYZE',
+        subtopics: [
+          { subtopic: 'Complex applications', bloom_level: 'APPLY' },
+          { subtopic: 'Best practices', bloom_level: 'EVALUATE' },
+          'Case studies'
+        ]
       },
       {
         topic: 'Practical Applications',
-        subtopics: ['Hands-on exercises', 'Project work', 'Real-world scenarios']
+        bloom_level: 'APPLY',
+        subtopics: [
+          { subtopic: 'Hands-on exercises', bloom_level: 'APPLY' },
+          { subtopic: 'Project work', bloom_level: 'CREATE' },
+          'Real-world scenarios'
+        ]
       },
       {
         topic: 'Assessment & Review',
-        subtopics: ['Review sessions', 'Practice tests', 'Final assessment']
+        bloom_level: 'EVALUATE',
+        subtopics: [
+          'Review sessions',
+          { subtopic: 'Practice tests', bloom_level: 'ANALYZE' },
+          'Final assessment'
+        ]
       }
     ];
   }
@@ -299,6 +421,12 @@ Return a JSON array with this structure:
       subjectiveCount: number;
     }>;
     courseContext?: string;
+    difficultyDistribution?: {
+      easy: number;
+      medium: number;
+      hard: number;
+    };
+    quizLevel?: 'UG' | 'PG';
   }): Promise<{
     questions: Array<{
       questionType: 'MCQ' | 'MSQ' | 'SUBJECTIVE';
@@ -306,6 +434,7 @@ Return a JSON array with this structure:
       topicTitle: string;
       subtopic: string;
       difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+      bloom_level: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
       options?: Array<{
         label: string;
         text: string;
@@ -333,7 +462,24 @@ Return a JSON array with this structure:
         
         console.log(`🤖 Generating ${totalQuestionsForSubtopic} questions for: ${subtopic.topicTitle} → ${subtopic.subtopic}`);
         
-        const prompt = `You are an expert assessment designer. Generate questions for a course assessment.
+        const difficultyDist = params.difficultyDistribution || { easy: 30, medium: 50, hard: 20 };
+        const quizLevel = params.quizLevel || 'UG';
+        
+        const levelGuidance = quizLevel === 'UG' 
+          ? `ACADEMIC LEVEL: Undergraduate (UG)
+- Focus on fundamental concepts, basic understanding, and foundational knowledge
+- Questions should test recall, comprehension, and basic application
+- Use clear, straightforward language appropriate for undergraduate students
+- Emphasize understanding core concepts rather than advanced analysis`
+          : `ACADEMIC LEVEL: Postgraduate (PG)
+- Focus on advanced concepts, critical thinking, and deep analysis
+- Questions should test higher-order thinking: analysis, evaluation, and creation
+- Use more sophisticated language and complex scenarios
+- Emphasize critical analysis, synthesis, and original problem-solving`;
+        
+        const prompt = `You are an expert assessment designer. Generate questions for a course assessment with Bloom's Taxonomy levels and difficulty distribution.
+
+${levelGuidance}
 
 Topic: ${subtopic.topicTitle}
 Subtopic: ${subtopic.subtopic}
@@ -344,12 +490,23 @@ Generate the following questions:
 - ${subtopic.msqCount} Multiple Select Questions (MSQ) with 4-5 options each, MULTIPLE correct answers
 - ${subtopic.subjectiveCount} Subjective/Open-ended questions
 
+Difficulty Distribution: ${difficultyDist.easy}% EASY, ${difficultyDist.medium}% MEDIUM, ${difficultyDist.hard}% HARD
+
+Bloom's Taxonomy Levels:
+- REMEMBER: Recalling facts, basic concepts (e.g., "What is X?")
+- UNDERSTAND: Explaining ideas or concepts (e.g., "Explain how X works")
+- APPLY: Using information in new situations (e.g., "Use X to solve Y")
+- ANALYZE: Drawing connections among ideas (e.g., "Compare X and Y")
+- EVALUATE: Justifying a stand or decision (e.g., "Evaluate which approach is better")
+- CREATE: Producing new or original work (e.g., "Design a solution for X")
+
 Return ONLY a valid JSON array with this exact structure:
 [
   {
     "questionType": "MCQ",
     "questionText": "What is the primary purpose of CI/CD?",
     "difficulty": "MEDIUM",
+    "bloom_level": "REMEMBER",
     "options": [
       {"label": "A", "text": "To automate testing and deployment", "isCorrect": true},
       {"label": "B", "text": "To write better code", "isCorrect": false},
@@ -363,6 +520,7 @@ Return ONLY a valid JSON array with this exact structure:
     "questionType": "MSQ",
     "questionText": "Which are benefits of infrastructure as code? (Select all that apply)",
     "difficulty": "MEDIUM",
+    "bloom_level": "ANALYZE",
     "options": [
       {"label": "A", "text": "Version control", "isCorrect": true},
       {"label": "B", "text": "Repeatability", "isCorrect": true},
@@ -376,6 +534,7 @@ Return ONLY a valid JSON array with this exact structure:
     "questionType": "SUBJECTIVE",
     "questionText": "Explain the benefits of using Terraform for infrastructure management.",
     "difficulty": "HARD",
+    "bloom_level": "EVALUATE",
     "explanation": "Look for mentions of declarative syntax, state management, provider ecosystem, and automation",
     "points": 5
   }
@@ -385,9 +544,10 @@ Important rules:
 1. For MCQ: Exactly 4 options, ONLY ONE with isCorrect: true
 2. For MSQ: 4-5 options, AT LEAST TWO with isCorrect: true
 3. For SUBJECTIVE: No options array needed
-4. Difficulty: Mix of EASY (30%), MEDIUM (50%), HARD (20%)
-5. Points: MCQ=1, MSQ=2, SUBJECTIVE=5
-6. Return ONLY the JSON array, no markdown, no extra text`;
+4. Difficulty: Follow the distribution (${difficultyDist.easy}% EASY, ${difficultyDist.medium}% MEDIUM, ${difficultyDist.hard}% HARD)
+5. Bloom Level: Assign appropriate cognitive level to each question (REMEMBER, UNDERSTAND, APPLY, ANALYZE, EVALUATE, or CREATE)
+6. Points: MCQ=1, MSQ=2, SUBJECTIVE=5
+7. Return ONLY the JSON array, no markdown, no extra text`;
 
         const response = await client.getChatCompletions(
           deployment,
@@ -411,6 +571,7 @@ Important rules:
         // Add topic and subtopic info to each question
         const questionsWithContext = parsedQuestions.map((q: any) => ({
           ...q,
+          bloom_level: q.bloom_level || 'UNDERSTAND', // Default if not provided
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic
         }));
@@ -445,6 +606,7 @@ Important rules:
       topicTitle: string;
       subtopic: string;
       difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+      bloom_level: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
       options?: Array<{
         label: string;
         text: string;
@@ -466,6 +628,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: difficulties[i % 3],
+          bloom_level: ['REMEMBER', 'UNDERSTAND', 'APPLY'][i % 3] as any,
           options: [
             { label: 'A', text: 'Correct answer for this concept', isCorrect: true },
             { label: 'B', text: 'Incorrect option 1', isCorrect: false },
@@ -485,6 +648,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: difficulties[(i + 1) % 3],
+          bloom_level: ['ANALYZE', 'EVALUATE', 'APPLY'][(i + 1) % 3] as any,
           options: [
             { label: 'A', text: 'First correct statement', isCorrect: true },
             { label: 'B', text: 'Second correct statement', isCorrect: true },
@@ -505,6 +669,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: 'HARD',
+          bloom_level: ['EVALUATE', 'CREATE', 'ANALYZE'][i % 3] as any,
           explanation: `Look for clear explanations, practical examples, and understanding of core concepts in ${subtopic.subtopic}`,
           points: 5
         });

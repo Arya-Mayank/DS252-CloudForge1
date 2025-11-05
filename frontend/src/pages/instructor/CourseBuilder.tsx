@@ -32,6 +32,7 @@ export const CourseBuilder = () => {
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [isQuestionViewerOpen, setIsQuestionViewerOpen] = useState(false);
   const [publishingAssessment, setPublishingAssessment] = useState<string | null>(null);
+  const [hasNewMaterial, setHasNewMaterial] = useState(false); // Track if new material uploaded after syllabus
 
   // AI Analysis Progress
   const [analysisProgress, setAnalysisProgress] = useState({
@@ -52,6 +53,8 @@ export const CourseBuilder = () => {
       if (data.file_name) {
         setUploadedFiles([{ name: data.file_name, url: data.file_url }]);
       }
+      // Reset new material flag when course is loaded
+      setHasNewMaterial(false);
       
       // Load assessments for this course
       try {
@@ -95,13 +98,18 @@ export const CourseBuilder = () => {
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!id) return;
+    if (!id || !course) return;
     
     setUploading(true);
     try {
       const updatedCourse = await coursesAPI.uploadMaterial(id, file);
       setCourse(updatedCourse);
       setUploadedFiles([...uploadedFiles, { name: file.name, url: updatedCourse.file_url }]);
+      
+      // If course is published and has syllabus, mark that new material was added
+      if (course.is_published && course.syllabus && Array.isArray(course.syllabus) && course.syllabus.length > 0) {
+        setHasNewMaterial(true);
+      }
       
       // Simulate content analysis
       setTimeout(() => setAnalysisProgress(prev => ({ ...prev, contentAnalysis: true })), 1000);
@@ -140,23 +148,35 @@ export const CourseBuilder = () => {
     }
   };
 
-  const handleGenerateSyllabus = async () => {
+  const handleGenerateSyllabus = async (updateExisting: boolean = false) => {
     if (!id || !course?.file_name) return;
 
     setGenerating(true);
-    setGenerationStatus('📄 Extracting text from uploaded file...');
+    setGenerationStatus(updateExisting 
+      ? '📄 Extracting text from new material...'
+      : '📄 Extracting text from uploaded file...');
     
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    setGenerationStatus('🤖 Analyzing content with Azure AI...');
+    setGenerationStatus(updateExisting
+      ? '🤖 Merging new content with existing syllabus...'
+      : '🤖 Analyzing content with Azure AI...');
     setAnalysisProgress(prev => ({ ...prev, syllabusGeneration: true }));
 
     try {
       // Don't send documentText - let backend extract from uploaded PDF
-      setGenerationStatus('🧠 GPT-5-nano is creating your syllabus...');
-      await aiAPI.generateSyllabus(id, '');
+      setGenerationStatus(updateExisting
+        ? '🧠 Updating syllabus with new content...'
+        : '🧠 GPT-5-nano is creating your syllabus...');
+      await aiAPI.generateSyllabus(id, '', updateExisting);
       
-      setGenerationStatus('✅ Syllabus generated successfully!');
+      setGenerationStatus(updateExisting 
+        ? '✅ Syllabus updated successfully!'
+        : '✅ Syllabus generated successfully!');
+      
+      // Reset the new material flag
+      setHasNewMaterial(false);
+      
       await loadCourse();
       
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -166,7 +186,7 @@ export const CourseBuilder = () => {
       console.error('Syllabus generation failed:', error);
       setGenerationStatus('❌ Failed to generate syllabus');
       await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('Failed to generate syllabus. Please try again.');
+      alert(`Failed to ${updateExisting ? 'update' : 'generate'} syllabus. Please try again.`);
       setGenerationStatus('');
     } finally {
       setGenerating(false);
@@ -238,9 +258,36 @@ export const CourseBuilder = () => {
     setEditingSyllabus(updated);
   };
 
+  const handleTopicBloomLevelChange = (index: number, bloomLevel: string) => {
+    const updated = [...editingSyllabus];
+    updated[index].bloom_level = bloomLevel || undefined;
+    setEditingSyllabus(updated);
+  };
+
   const handleSubtopicChange = (topicIndex: number, subtopicIndex: number, newSubtopic: string) => {
     const updated = [...editingSyllabus];
-    updated[topicIndex].subtopics[subtopicIndex] = newSubtopic;
+    const currentSubtopic = updated[topicIndex].subtopics[subtopicIndex];
+    // Preserve bloom_level if it exists
+    if (typeof currentSubtopic === 'object' && currentSubtopic.bloom_level) {
+      updated[topicIndex].subtopics[subtopicIndex] = {
+        subtopic: newSubtopic,
+        bloom_level: currentSubtopic.bloom_level
+      };
+    } else {
+      updated[topicIndex].subtopics[subtopicIndex] = newSubtopic;
+    }
+    setEditingSyllabus(updated);
+  };
+
+  const handleSubtopicBloomLevelChange = (topicIndex: number, subtopicIndex: number, bloomLevel: string) => {
+    const updated = [...editingSyllabus];
+    const currentSubtopic = updated[topicIndex].subtopics[subtopicIndex];
+    const subtopicText = typeof currentSubtopic === 'string' ? currentSubtopic : currentSubtopic.subtopic;
+    
+    updated[topicIndex].subtopics[subtopicIndex] = bloomLevel 
+      ? { subtopic: subtopicText, bloom_level: bloomLevel }
+      : subtopicText;
+    
     setEditingSyllabus(updated);
   };
 
@@ -266,6 +313,41 @@ export const CourseBuilder = () => {
     setEditingSyllabus(updated);
   };
 
+  const getBloomLevelColor = (level?: string) => {
+    switch (level) {
+      case 'REMEMBER': return 'bg-gray-100 text-gray-700 border-gray-300';
+      case 'UNDERSTAND': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'APPLY': return 'bg-green-100 text-green-700 border-green-300';
+      case 'ANALYZE': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'EVALUATE': return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'CREATE': return 'bg-purple-100 text-purple-700 border-purple-300';
+      default: return 'bg-gray-50 text-gray-600 border-gray-200';
+    }
+  };
+
+  const getBloomLevelLabel = (level?: string) => {
+    if (!level) return null;
+    const labels: Record<string, string> = {
+      'REMEMBER': 'Remember',
+      'UNDERSTAND': 'Understand',
+      'APPLY': 'Apply',
+      'ANALYZE': 'Analyze',
+      'EVALUATE': 'Evaluate',
+      'CREATE': 'Create',
+    };
+    return labels[level] || level;
+  };
+
+  const bloomLevels: Array<{ value: string; label: string }> = [
+    { value: '', label: 'None' },
+    { value: 'REMEMBER', label: 'Remember' },
+    { value: 'UNDERSTAND', label: 'Understand' },
+    { value: 'APPLY', label: 'Apply' },
+    { value: 'ANALYZE', label: 'Analyze' },
+    { value: 'EVALUATE', label: 'Evaluate' },
+    { value: 'CREATE', label: 'Create' },
+  ];
+
   const handleCreateAssessment = async (data: {
     title: string;
     subtopics: Array<{
@@ -275,6 +357,8 @@ export const CourseBuilder = () => {
       msqCount: number;
       subjectiveCount: number;
     }>;
+    difficultyDistribution?: { easy: number; medium: number; hard: number };
+    quizLevel?: 'UG' | 'PG';
   }) => {
     if (!id) return;
 
@@ -299,7 +383,9 @@ export const CourseBuilder = () => {
       const result = await assessmentsAPI.create({
         courseId: id,
         title: data.title,
-        subtopics: data.subtopics
+        subtopics: data.subtopics,
+        difficultyDistribution: data.difficultyDistribution,
+        quizLevel: data.quizLevel || 'UG'
       });
       
       console.log(`✅ Assessment created: ${result.assessment.id}`);
@@ -486,6 +572,27 @@ export const CourseBuilder = () => {
                   </p>
                 </div>
                 <div className="flex items-center space-x-3 ml-6">
+                  {hasNewMaterial && course?.is_published && course?.file_name && (
+                    <button
+                      onClick={() => handleGenerateSyllabus(true)}
+                      disabled={generating || isEditMode}
+                      className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {generating ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Updating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>Update with New Material</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                   {!isEditMode && !course?.is_published && (
                     <button
                       onClick={handleEditSyllabus}
@@ -538,10 +645,64 @@ export const CourseBuilder = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Upload Course Materials</h1>
                   <p className="mt-1 text-gray-600">
-                    Upload your course content such as textbooks, lecture notes, or reference materials.
-                    Our AI will analyze the content to create a comprehensive course structure.
+                    {course?.is_published ? (
+                      <>
+                        You can continue to upload additional materials even after publishing. 
+                        Update your syllabus to include new content and keep students informed.
+                      </>
+                    ) : (
+                      <>
+                        Upload your course content such as textbooks, lecture notes, or reference materials.
+                        Our AI will analyze the content to create a comprehensive course structure.
+                      </>
+                    )}
                   </p>
                 </div>
+
+                {/* New Material Alert for Published Courses */}
+                {hasNewMaterial && course?.is_published && course?.syllabus && (
+                  <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <h3 className="text-sm font-medium text-amber-800">
+                          New Material Added
+                        </h3>
+                        <div className="mt-2 text-sm text-amber-700">
+                          <p>
+                            You've added new material to a published course. Update your syllabus to include this new content 
+                            so students can see the latest course structure.
+                          </p>
+                        </div>
+                        <div className="mt-4">
+                          <button
+                            onClick={() => handleGenerateSyllabus(true)}
+                            disabled={generating}
+                            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                          >
+                            {generating ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>Updating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>Update Syllabus with New Material</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Drag and Drop Area */}
                 <div
@@ -668,14 +829,24 @@ export const CourseBuilder = () => {
                   </div>
                 )}
 
-                {/* Generate Syllabus CTA */}
-                {uploadedFiles.length > 0 && (
-                  <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-6 text-white">
+                {/* Generate/Update Syllabus CTA */}
+                {uploadedFiles.length > 0 && !hasNewMaterial && (
+                  <div className={`rounded-xl p-6 text-white ${
+                    course?.is_published && course?.syllabus 
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600' 
+                      : 'bg-gradient-to-r from-primary-500 to-primary-600'
+                  }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold">Ready to generate your syllabus?</h3>
-                        <p className="text-primary-100 mt-1">
-                          Our AI will analyze your uploaded materials and create a comprehensive course structure
+                        <h3 className="text-lg font-semibold">
+                          {course?.is_published && course?.syllabus 
+                            ? 'Update Your Syllabus' 
+                            : 'Ready to generate your syllabus?'}
+                        </h3>
+                        <p className="text-blue-100 mt-1">
+                          {course?.is_published && course?.syllabus
+                            ? 'Generate a new syllabus from the latest materials, or update the existing one to merge new content.'
+                            : 'Our AI will analyze your uploaded materials and create a comprehensive course structure'}
                         </p>
                         {generationStatus && (
                           <div className="mt-3 bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 text-sm font-medium">
@@ -683,25 +854,70 @@ export const CourseBuilder = () => {
                           </div>
                         )}
                       </div>
-                      <button
-                        onClick={handleGenerateSyllabus}
-                        disabled={generating}
-                        className="ml-6 bg-white text-primary-600 px-6 py-3 rounded-lg font-medium hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 flex-shrink-0"
-                      >
-                        {generating ? (
+                      <div className="ml-6 flex flex-col space-y-2 flex-shrink-0">
+                        {course?.is_published && course?.syllabus ? (
                           <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                            <span>Generating...</span>
+                            <button
+                              onClick={() => handleGenerateSyllabus(true)}
+                              disabled={generating}
+                              className="bg-white text-blue-600 px-6 py-3 rounded-lg font-medium hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                            >
+                              {generating ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                  <span>Updating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  <span>Update Syllabus</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleGenerateSyllabus(false)}
+                              disabled={generating}
+                              className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                            >
+                              {generating ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  <span>Generating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                  <span>Generate New</span>
+                                </>
+                              )}
+                            </button>
                           </>
                         ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <span>Generate Syllabus</span>
-                          </>
+                          <button
+                            onClick={() => handleGenerateSyllabus(false)}
+                            disabled={generating}
+                            className="bg-white text-primary-600 px-6 py-3 rounded-lg font-medium hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                          >
+                            {generating ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                                <span>Generating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span>Generate Syllabus</span>
+                              </>
+                            )}
+                          </button>
                         )}
-                      </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -713,6 +929,61 @@ export const CourseBuilder = () => {
               <div className="space-y-6">
                 {course.syllabus ? (
                   <>
+                    {/* Bloom's Taxonomy Legend */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                            <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Bloom's Taxonomy Levels
+                          </h3>
+                          <p className="text-xs text-gray-600 mb-3">
+                            These badges indicate the cognitive skill level expected for each topic. They help students understand what they need to achieve.
+                          </p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('REMEMBER')}`}>
+                                Remember
+                              </span>
+                              <span className="text-xs text-gray-600">Recall facts</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('UNDERSTAND')}`}>
+                                Understand
+                              </span>
+                              <span className="text-xs text-gray-600">Explain ideas</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('APPLY')}`}>
+                                Apply
+                              </span>
+                              <span className="text-xs text-gray-600">Use in practice</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('ANALYZE')}`}>
+                                Analyze
+                              </span>
+                              <span className="text-xs text-gray-600">Break down</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('EVALUATE')}`}>
+                                Evaluate
+                              </span>
+                              <span className="text-xs text-gray-600">Make judgments</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('CREATE')}`}>
+                                Create
+                              </span>
+                              <span className="text-xs text-gray-600">Build new</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Edit Mode Actions */}
                     {isEditMode && (
                       <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -762,17 +1033,55 @@ export const CourseBuilder = () => {
                           {/* Topic Header */}
                           <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-4 border-b border-primary-200">
                             <div className="flex items-center justify-between">
-                              {isEditMode ? (
-                                <input
-                                  type="text"
-                                  value={item.topic}
-                                  onChange={(e) => handleTopicChange(index, e.target.value)}
-                                  className="flex-1 text-lg font-semibold text-gray-900 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                  placeholder="Topic name"
-                                />
-                              ) : (
-                                <h3 className="text-lg font-semibold text-gray-900">{item.topic}</h3>
-                              )}
+                              <div className="flex-1 flex items-center space-x-3 flex-wrap">
+                                {isEditMode ? (
+                                  <>
+                                    <input
+                                      type="text"
+                                      value={item.topic}
+                                      onChange={(e) => handleTopicChange(index, e.target.value)}
+                                      className="flex-1 min-w-[200px] text-lg font-semibold text-gray-900 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                      placeholder="Topic name"
+                                    />
+                                    <select
+                                      value={item.bloom_level || ''}
+                                      onChange={(e) => handleTopicBloomLevelChange(index, e.target.value)}
+                                      className={`px-3 py-2 rounded-lg text-sm font-medium border focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${getBloomLevelColor(item.bloom_level)}`}
+                                    >
+                                      {bloomLevels.map((level) => (
+                                        <option key={level.value} value={level.value}>
+                                          {level.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </>
+                                ) : (
+                                  <>
+                                    <h3 className="text-lg font-semibold text-gray-900">{item.topic}</h3>
+                                    <select
+                                      value={item.bloom_level || ''}
+                                      onChange={(e) => {
+                                        // Initialize editingSyllabus if not already in edit mode
+                                        if (!isEditMode && course.syllabus) {
+                                          setEditingSyllabus(JSON.parse(JSON.stringify(course.syllabus)));
+                                        }
+                                        const updated = isEditMode ? [...editingSyllabus] : JSON.parse(JSON.stringify(course.syllabus || []));
+                                        updated[index].bloom_level = e.target.value || undefined;
+                                        setEditingSyllabus(updated);
+                                        setIsEditMode(true);
+                                      }}
+                                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition-opacity ${getBloomLevelColor(item.bloom_level)}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {bloomLevels.map((level) => (
+                                        <option key={level.value} value={level.value}>
+                                          {level.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </>
+                                )}
+                              </div>
                               {isEditMode && (
                                 <button
                                   onClick={() => handleRemoveTopic(index)}
@@ -790,37 +1099,74 @@ export const CourseBuilder = () => {
                           {/* Subtopics */}
                           <div className="px-6 py-4">
                             <ul className="space-y-2">
-                              {item.subtopics.map((subtopic: string, subIndex: number) => (
-                                <li key={subIndex} className="flex items-start space-x-3">
-                                  {!isEditMode && (
-                                    <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                  )}
-                                  {isEditMode ? (
-                                    <div className="flex-1 flex items-center space-x-2">
-                                      <input
-                                        type="text"
-                                        value={subtopic}
-                                        onChange={(e) => handleSubtopicChange(index, subIndex, e.target.value)}
-                                        className="flex-1 text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                        placeholder="Subtopic name"
-                                      />
-                                      <button
-                                        onClick={() => handleRemoveSubtopic(index, subIndex)}
-                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                        title="Remove subtopic"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="text-gray-700">{subtopic}</span>
-                                  )}
-                                </li>
-                              ))}
+                              {item.subtopics.map((subtopic: string | { subtopic: string; bloom_level?: string }, subIndex: number) => {
+                                const subtopicText = typeof subtopic === 'string' ? subtopic : subtopic.subtopic;
+                                const subtopicBloomLevel = typeof subtopic === 'object' ? subtopic.bloom_level : undefined;
+                                
+                                return (
+                                  <li key={subIndex} className="flex items-start space-x-3">
+                                    {!isEditMode && (
+                                      <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                      </svg>
+                                    )}
+                                    {isEditMode ? (
+                                      <div className="flex-1 flex items-center space-x-2 flex-wrap gap-2">
+                                        <input
+                                          type="text"
+                                          value={subtopicText}
+                                          onChange={(e) => handleSubtopicChange(index, subIndex, e.target.value)}
+                                          className="flex-1 min-w-[200px] text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                          placeholder="Subtopic name"
+                                        />
+                                        <select
+                                          value={subtopicBloomLevel || ''}
+                                          onChange={(e) => handleSubtopicBloomLevelChange(index, subIndex, e.target.value)}
+                                          className={`px-3 py-2 rounded-lg text-xs font-medium border focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${getBloomLevelColor(subtopicBloomLevel)}`}
+                                        >
+                                          {bloomLevels.map((level) => (
+                                            <option key={level.value} value={level.value}>
+                                              {level.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          onClick={() => handleRemoveSubtopic(index, subIndex)}
+                                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                          title="Remove subtopic"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex-1 flex items-center space-x-2 flex-wrap gap-2">
+                                        <span className="text-gray-700">{subtopicText}</span>
+                                        <select
+                                          value={subtopicBloomLevel || ''}
+                                          onChange={(e) => {
+                                            // Initialize editingSyllabus if not already in edit mode
+                                            if (!isEditMode && course.syllabus) {
+                                              setEditingSyllabus(JSON.parse(JSON.stringify(course.syllabus)));
+                                            }
+                                            handleSubtopicBloomLevelChange(index, subIndex, e.target.value);
+                                            setIsEditMode(true);
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-xs font-medium border cursor-pointer hover:opacity-80 transition-opacity ${getBloomLevelColor(subtopicBloomLevel)}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          {bloomLevels.map((level) => (
+                                            <option key={level.value} value={level.value}>
+                                              {level.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
 
                             {/* Add Subtopic Button */}

@@ -28,8 +28,9 @@ export interface Course {
 
 export interface SyllabusItem {
   topic: string;
-  subtopics: string[];
+  subtopics: Array<string | { subtopic: string; bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' }>;
   estimatedHours: number;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
 }
 
 export interface Assessment {
@@ -49,11 +50,20 @@ export interface Question {
   assessment_id: string;
   question_text: string;
   type: 'mcq' | 'short-answer' | 'true-false';
+  question_type?: 'MCQ' | 'MSQ' | 'SUBJECTIVE';
   options?: string[];
+  question_options?: Array<{
+    id: string;
+    option_label: string;
+    option_text: string;
+    is_correct: boolean;
+  }>;
   correct_answer?: string;
   difficulty?: string;
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
   topic?: string;
   points?: number;
+  explanation?: string;
 }
 
 export interface Result {

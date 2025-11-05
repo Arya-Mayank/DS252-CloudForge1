@@ -2,10 +2,11 @@ import apiClient from './client';
 import { SyllabusItem, Question, Recommendation } from '../types';
 
 export const aiAPI = {
-  generateSyllabus: async (courseId: string, documentText: string): Promise<SyllabusItem[]> => {
+  generateSyllabus: async (courseId: string, documentText: string, updateExisting: boolean = false): Promise<SyllabusItem[]> => {
     const response = await apiClient.post<{ syllabus: SyllabusItem[] }>('/ai/syllabus', {
       courseId,
       documentText,
+      updateExisting,
     });
     return response.data.syllabus;
   },

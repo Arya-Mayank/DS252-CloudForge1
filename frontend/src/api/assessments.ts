@@ -30,6 +30,7 @@ export interface Question {
   points: number;
   explanation?: string;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
   created_at: string;
   updated_at: string;
   options?: QuestionOption[];
@@ -42,6 +43,12 @@ export interface QuestionOption {
   option_label: string;
   is_correct: boolean;
   created_at: string;
+}
+
+export interface DifficultyDistribution {
+  easy: number;
+  medium: number;
+  hard: number;
 }
 
 export interface CreateAssessmentRequest {
@@ -57,6 +64,8 @@ export interface CreateAssessmentRequest {
   }>;
   timeLimit?: number;
   passingScore?: number;
+  difficultyDistribution?: DifficultyDistribution;
+  quizLevel?: 'UG' | 'PG';
 }
 
 export const assessmentsAPI = {
@@ -134,6 +143,24 @@ export const assessmentsAPI = {
    */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/assessments/${id}`);
+  },
+
+  /**
+   * Save selected questions from assessment to question bank
+   */
+  saveToQuestionBank: async (assessmentId: string, questionIds: string[]): Promise<{
+    message: string;
+    savedCount: number;
+    totalRequested: number;
+  }> => {
+    const response = await apiClient.post<{
+      message: string;
+      savedCount: number;
+      totalRequested: number;
+    }>(`/assessments/${assessmentId}/save-to-bank`, {
+      questionIds
+    });
+    return response.data;
   },
 };
 

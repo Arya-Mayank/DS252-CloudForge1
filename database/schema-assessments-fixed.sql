@@ -50,6 +50,7 @@ CREATE TABLE questions (
     points DECIMAL(5,2) DEFAULT 1.0,
     explanation TEXT,
     difficulty VARCHAR(20) CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
+    bloom_level VARCHAR(20) CHECK (bloom_level IN ('REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(assessment_id, question_number)
@@ -131,6 +132,7 @@ CREATE INDEX idx_questions_assessment ON questions(assessment_id);
 CREATE INDEX idx_questions_topic ON questions(topic_id);
 CREATE INDEX idx_questions_subtopic ON questions(subtopic_id);
 CREATE INDEX idx_questions_type ON questions(question_type);
+CREATE INDEX idx_questions_bloom ON questions(bloom_level);
 
 CREATE INDEX idx_question_options_question ON question_options(question_id);
 CREATE INDEX idx_question_options_correct ON question_options(is_correct);
@@ -145,6 +147,62 @@ CREATE INDEX idx_attempts_completed ON student_attempts(is_completed);
 
 CREATE INDEX idx_answers_attempt ON student_answers(attempt_id);
 CREATE INDEX idx_answers_question ON student_answers(question_id);
+
+-- ============================================
+-- QUESTION BANK TABLE (for adaptive assessments)
+-- ============================================
+
+CREATE TABLE question_bank (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
+    subtopic_id UUID REFERENCES subtopics(id) ON DELETE SET NULL,
+    question_type VARCHAR(20) NOT NULL CHECK (question_type IN ('MCQ', 'MSQ', 'SUBJECTIVE')),
+    question_text TEXT NOT NULL,
+    points DECIMAL(5,2) DEFAULT 1.0,
+    explanation TEXT,
+    difficulty VARCHAR(20) CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
+    bloom_level VARCHAR(20) CHECK (bloom_level IN ('REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ============================================
+-- QUESTION BANK OPTIONS TABLE (for MCQ/MSQ)
+-- ============================================
+
+CREATE TABLE question_bank_options (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question_bank_id UUID NOT NULL REFERENCES question_bank(id) ON DELETE CASCADE,
+    option_text TEXT NOT NULL,
+    option_label VARCHAR(10) NOT NULL,
+    is_correct BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(question_bank_id, option_label)
+);
+
+-- ============================================
+-- INDEXES FOR QUESTION BANK
+-- ============================================
+
+CREATE INDEX idx_question_bank_course ON question_bank(course_id);
+CREATE INDEX idx_question_bank_topic ON question_bank(topic_id);
+CREATE INDEX idx_question_bank_subtopic ON question_bank(subtopic_id);
+CREATE INDEX idx_question_bank_type ON question_bank(question_type);
+CREATE INDEX idx_question_bank_difficulty ON question_bank(difficulty);
+CREATE INDEX idx_question_bank_bloom ON question_bank(bloom_level);
+CREATE INDEX idx_question_bank_filters ON question_bank(course_id, difficulty, bloom_level, question_type);
+
+CREATE INDEX idx_question_bank_options_question ON question_bank_options(question_bank_id);
+
+-- ============================================
+-- COMMENTS FOR QUESTION BANK
+-- ============================================
+
+COMMENT ON TABLE question_bank IS 'Stores questions in a reusable bank for adaptive assessments';
+COMMENT ON TABLE question_bank_options IS 'Stores MCQ/MSQ answer options for questions in the bank';
+COMMENT ON COLUMN question_bank.bloom_level IS 'Bloom taxonomy cognitive level: REMEMBER, UNDERSTAND, APPLY, ANALYZE, EVALUATE, CREATE';
+COMMENT ON COLUMN question_bank.difficulty IS 'Question difficulty level for adaptive selection';
 
 -- ============================================
 -- COMMENTS
@@ -248,6 +306,9 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_student_answers_updated_at BEFORE UPDATE ON student_answers
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_question_bank_updated_at BEFORE UPDATE ON question_bank
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- COMPLETE!
 -- ============================================
@@ -258,6 +319,6 @@ SELECT
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = t.table_name) as column_count
 FROM information_schema.tables t
 WHERE table_schema = 'public' 
-AND table_name IN ('assessments', 'questions', 'question_options', 'assessment_topics', 'student_attempts', 'student_answers')
+AND table_name IN ('assessments', 'questions', 'question_options', 'assessment_topics', 'student_attempts', 'student_answers', 'question_bank', 'question_bank_options')
 ORDER BY table_name;
 
