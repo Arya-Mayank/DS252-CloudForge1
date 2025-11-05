@@ -7,18 +7,26 @@ import { jwtConfig } from '../config/jwt.config';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 /**
+ * Register validation middleware
+ */
+export const validateRegister = [
+  body('email').isEmail().withMessage('Please provide a valid email'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('role').isIn(['instructor', 'student']).withMessage('Role must be either instructor or student'),
+];
+
+/**
  * Register a new user (instructor or student)
  */
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Validation
-    await body('email').isEmail().run(req);
-    await body('password').isLength({ min: 6 }).run(req);
-    await body('role').isIn(['instructor', 'student']).run(req);
-
+    // Check validation results
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      res.status(400).json({ errors: errors.array() });
+      res.status(400).json({ 
+        error: 'Validation failed',
+        errors: errors.array() 
+      });
       return;
     }
 
@@ -69,17 +77,25 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
+ * Login validation middleware
+ */
+export const validateLogin = [
+  body('email').isEmail().withMessage('Please provide a valid email'),
+  body('password').notEmpty().withMessage('Password is required'),
+];
+
+/**
  * Login user
  */
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Validation
-    await body('email').isEmail().run(req);
-    await body('password').notEmpty().run(req);
-
+    // Check validation results
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      res.status(400).json({ errors: errors.array() });
+      res.status(400).json({ 
+        error: 'Validation failed',
+        errors: errors.array() 
+      });
       return;
     }
 

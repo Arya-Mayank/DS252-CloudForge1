@@ -615,6 +615,230 @@ class AssessmentModel {
   }
 
   /**
+   * Get next question adaptively based on student performance
+   */
+  async getNextAdaptiveQuestion(
+    attemptId: string,
+    previousQuestionId?: string,
+    wasCorrect?: boolean
+  ): Promise<Question & { options?: QuestionOption[] } | null> {
+    const supabase = getSupabaseClient();
+
+    // Get attempt details
+    const { data: attempt } = await supabase
+      .from(this.attemptsTable)
+      .select('assessment_id, student_id')
+      .eq('id', attemptId)
+      .single();
+
+    if (!attempt) throw new Error('Attempt not found');
+
+    // Get all questions for this assessment
+    const allQuestions = await this.getQuestions(attempt.assessment_id);
+
+    // Get already answered questions
+    const { data: answeredQuestions } = await supabase
+      .from(this.answersTable)
+      .select('question_id')
+      .eq('attempt_id', attemptId);
+
+    const answeredQuestionIds = new Set((answeredQuestions || []).map(a => a.question_id));
+
+    // Filter out already answered questions
+    const availableQuestions = allQuestions.filter(q => !answeredQuestionIds.has(q.id));
+
+    if (availableQuestions.length === 0) {
+      return null; // No more questions
+    }
+
+    // If this is the first question, return random
+    if (!previousQuestionId) {
+      const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+      return availableQuestions[randomIndex];
+    }
+
+    // Get previous question details
+    const previousQuestion = allQuestions.find(q => q.id === previousQuestionId);
+    if (!previousQuestion) {
+      // Fallback: return random question
+      const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+      return availableQuestions[randomIndex];
+    }
+
+    // Get assessment topics to find related topics
+    const assessmentTopics = await this.getTopics(attempt.assessment_id);
+    
+    // Get course topics to determine related topics (adjacent in order)
+    const { data: courseTopics } = await supabase
+      .from('topics')
+      .select('id, order_index, course_id')
+      .in('id', assessmentTopics);
+
+    // Find related topics (same topic or adjacent topics)
+    const relatedTopicIds = new Set<string>();
+    if (previousQuestion.topic_id) {
+      relatedTopicIds.add(previousQuestion.topic_id);
+      
+      // Find adjacent topics
+      const currentTopic = courseTopics?.find(t => t.id === previousQuestion.topic_id);
+      if (currentTopic) {
+        const adjacentTopics = courseTopics?.filter(t => 
+          Math.abs(t.order_index - currentTopic.order_index) <= 1
+        ) || [];
+        adjacentTopics.forEach(t => relatedTopicIds.add(t.id));
+      }
+    }
+
+    // Adaptive selection logic
+    let candidateQuestions = availableQuestions;
+
+    // Filter by topic: same or related topic
+    if (relatedTopicIds.size > 0) {
+      candidateQuestions = availableQuestions.filter(q => 
+        q.topic_id && relatedTopicIds.has(q.topic_id)
+      );
+      
+      // If no questions in related topics, fall back to any available
+      if (candidateQuestions.length === 0) {
+        candidateQuestions = availableQuestions;
+      }
+    }
+
+    // If previous answer was correct, prioritize higher difficulty
+    if (wasCorrect) {
+      const difficultyOrder = { 'EASY': 1, 'MEDIUM': 2, 'HARD': 3 };
+      const previousDifficulty = previousQuestion.difficulty || 'EASY';
+      const previousDifficultyLevel = difficultyOrder[previousDifficulty as keyof typeof difficultyOrder] || 1;
+
+      // Try to find higher difficulty questions in same/related topic
+      const higherDifficultyQuestions = candidateQuestions.filter(q => {
+        const qDifficulty = q.difficulty || 'EASY';
+        const qDifficultyLevel = difficultyOrder[qDifficulty as keyof typeof difficultyOrder] || 1;
+        return qDifficultyLevel > previousDifficultyLevel;
+      });
+
+      if (higherDifficultyQuestions.length > 0) {
+        // Return random from higher difficulty
+        const randomIndex = Math.floor(Math.random() * higherDifficultyQuestions.length);
+        return higherDifficultyQuestions[randomIndex];
+      }
+    }
+
+    // Fallback: return random from candidate questions
+    const randomIndex = Math.floor(Math.random() * candidateQuestions.length);
+    return candidateQuestions[randomIndex];
+  }
+
+  /**
+   * Submit a single answer and get next question
+   */
+  async submitAnswerAndGetNext(
+    attemptId: string,
+    questionId: string,
+    answer: {
+      answerText?: string;
+      selectedOptionIds?: string[];
+      timeTakenSeconds?: number;
+    }
+  ): Promise<{
+    isCorrect: boolean;
+    pointsEarned: number;
+    nextQuestion: (Question & { options?: QuestionOption[] }) | null;
+    isComplete: boolean;
+  }> {
+    const supabase = getSupabaseClient();
+
+    // Get question details
+    const { data: question } = await supabase
+      .from(this.questionsTable)
+      .select('points, question_type, question_text, explanation, difficulty, topic_id')
+      .eq('id', questionId)
+      .single();
+
+    if (!question) throw new Error('Question not found');
+
+    // Calculate correctness
+    let isCorrect = false;
+    let pointsEarned = 0;
+
+    if (question.question_type === 'SUBJECTIVE') {
+      // For subjective, evaluate with AI (simplified - in production you might want immediate feedback)
+      isCorrect = await this.evaluateSubjectiveAnswer(
+        answer.answerText || '',
+        question.question_text,
+        question.explanation || ''
+      );
+    } else {
+      // For MCQ/MSQ, check against correct options
+      const { data: correctOptions } = await supabase
+        .from(this.optionsTable)
+        .select('id')
+        .eq('question_id', questionId)
+        .eq('is_correct', true);
+
+      if (correctOptions) {
+        const correctOptionIds = correctOptions.map(opt => opt.id);
+        const selectedIds = answer.selectedOptionIds || [];
+        
+        if (question.question_type === 'MCQ') {
+          isCorrect = selectedIds.length === 1 && correctOptionIds.includes(selectedIds[0]);
+        } else if (question.question_type === 'MSQ') {
+          isCorrect = selectedIds.length === correctOptionIds.length && 
+                     selectedIds.every(id => correctOptionIds.includes(id));
+        }
+      }
+    }
+
+    pointsEarned = isCorrect ? question.points : 0;
+
+    // Save answer
+    const { error: answerError } = await supabase
+      .from(this.answersTable)
+      .insert({
+        attempt_id: attemptId,
+        question_id: questionId,
+        text_answer: answer.answerText,
+        selected_option_ids: answer.selectedOptionIds,
+        is_correct: isCorrect,
+        points_earned: pointsEarned
+      });
+
+    if (answerError) throw new Error(`Failed to save answer: ${answerError.message}`);
+
+    // Get next question adaptively
+    const nextQuestion = await this.getNextAdaptiveQuestion(attemptId, questionId, isCorrect);
+
+    // Check if assessment is complete
+    const { data: attempt } = await supabase
+      .from(this.attemptsTable)
+      .select('assessment_id')
+      .eq('id', attemptId)
+      .single();
+
+    const allQuestions = await this.getQuestions(attempt?.assessment_id || '');
+    const { data: answeredQuestions } = await supabase
+      .from(this.answersTable)
+      .select('question_id')
+      .eq('attempt_id', attemptId);
+
+    const isComplete = (answeredQuestions?.length || 0) >= allQuestions.length;
+
+    return {
+      isCorrect,
+      pointsEarned,
+      nextQuestion,
+      isComplete
+    };
+  }
+
+  /**
+   * Get first question for adaptive assessment (random)
+   */
+  async getFirstAdaptiveQuestion(attemptId: string): Promise<Question & { options?: QuestionOption[] } | null> {
+    return this.getNextAdaptiveQuestion(attemptId);
+  }
+
+  /**
    * Evaluate subjective answer using AI
    */
   private async evaluateSubjectiveAnswer(

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { Question } from '../types';
 
 export interface StudentAttempt {
   id: string;
@@ -108,6 +109,49 @@ export const studentAssessmentsAPI = {
     const response = await apiClient.get<{
       attempts: StudentAttempt[];
     }>(`/student/assessments/${assessmentId}/attempts`);
+    return response.data;
+  },
+
+  /**
+   * Get next question for adaptive assessment
+   */
+  getNextQuestion: async (assessmentId: string, attemptId: string): Promise<{
+    question: Question | null;
+    isComplete: boolean;
+    message?: string;
+  }> => {
+    const response = await apiClient.get<{
+      question: Question | null;
+      isComplete: boolean;
+      message?: string;
+    }>(`/student/assessments/${assessmentId}/attempts/${attemptId}/next-question`);
+    return response.data;
+  },
+
+  /**
+   * Submit answer and get next question (adaptive flow)
+   */
+  submitAnswerAndGetNext: async (
+    assessmentId: string,
+    attemptId: string,
+    data: {
+      questionId: string;
+      answerText?: string;
+      selectedOptionIds?: string[];
+      timeTakenSeconds?: number;
+    }
+  ): Promise<{
+    isCorrect: boolean;
+    pointsEarned: number;
+    nextQuestion: Question | null;
+    isComplete: boolean;
+  }> => {
+    const response = await apiClient.post<{
+      isCorrect: boolean;
+      pointsEarned: number;
+      nextQuestion: Question | null;
+      isComplete: boolean;
+    }>(`/student/assessments/${assessmentId}/attempts/${attemptId}/submit-answer`, data);
     return response.data;
   },
 };

@@ -55,7 +55,13 @@ export const Register = () => {
         navigate('/student');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to register');
+      // Handle validation errors
+      if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        const errorMessages = err.response.data.errors.map((e: any) => e.msg || e.message).join(', ');
+        setError(errorMessages || 'Validation failed');
+      } else {
+        setError(err.response?.data?.error || err.message || 'Failed to register');
+      }
     } finally {
       setLoading(false);
     }

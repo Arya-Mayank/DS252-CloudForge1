@@ -9,14 +9,14 @@ const router = Router();
  * @desc    Register a new user
  * @access  Public
  */
-router.post('/register', authController.register);
+router.post('/register', authController.validateRegister, authController.register);
 
 /**
  * @route   POST /api/auth/login
  * @desc    Login user
  * @access  Public
  */
-router.post('/login', authController.login);
+router.post('/login', authController.validateLogin, authController.login);
 
 /**
  * @route   GET /api/auth/me

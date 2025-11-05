@@ -52,4 +52,28 @@ router.get(
   studentAssessmentsController.getStudentAttempts
 );
 
+/**
+ * @route   GET /api/student/assessments/:assessmentId/attempts/:attemptId/next-question
+ * @desc    Get first/next question for adaptive assessment
+ * @access  Private (Student only)
+ */
+router.get(
+  '/:assessmentId/attempts/:attemptId/next-question',
+  authenticateToken,
+  requireStudent,
+  studentAssessmentsController.getNextQuestion
+);
+
+/**
+ * @route   POST /api/student/assessments/:assessmentId/attempts/:attemptId/submit-answer
+ * @desc    Submit answer and get next question (adaptive flow)
+ * @access  Private (Student only)
+ */
+router.post(
+  '/:assessmentId/attempts/:attemptId/submit-answer',
+  authenticateToken,
+  requireStudent,
+  studentAssessmentsController.submitAnswerAndGetNext
+);
+
 export default router;
