@@ -27,38 +27,40 @@ AI-assisted learning management system for instructors and students. Professors 
 - Supabase project (or compatible PostgreSQL instance)
 - Azure credentials (optional — mocked when missing)
 
-## Quick Start
+## Quick Start (5 minutes)
 
-```bash
-git clone https://github.com/Arya-Mayank/DS252-CloudForge1.git
-cd DS252-CloudForge1
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Arya-Mayank/DS252-CloudForge1.git
+   cd DS252-CloudForge1
+   ```
 
-# Install dependencies
-cd backend && npm install
-cd ../frontend && npm install
-```
+2. **Install dependencies** (run both commands)
+   ```bash
+   cd backend && npm install
+   cd ../frontend && npm install
+   ```
 
-### Configure Environment Variables
+3. **Environment ready out-of-the-box**
+   - `backend/.env` and `frontend/.env` are already committed with course Supabase + Azure credentials.
+   - No additional configuration is required unless you want to override them locally.
+   - Treat these secrets as private—anyone with repo access can modify shared data and incur Azure usage.
 
-Copy the provided examples and fill in values:
+4. **Start the servers** (use two terminal windows or tabs)
+   ```bash
+   # Backend
+   cd backend
+   npm run dev
 
-| File | Purpose |
-|------|---------|
-| `backend/.env.example` → `backend/.env` | Supabase, JWT, optional Azure services, server config |
-| `frontend/.env.example` → `frontend/.env` | API base URL for the React app |
+   # Frontend
+   cd frontend
+   npm run dev
+   ```
+   Visit `http://localhost:5173` (Vite dev server). The backend listens on `http://localhost:5000` and is proxied automatically.
 
-Backend variables include:
-
-- `SUPABASE_URL`, `SUPABASE_KEY`
-- `JWT_SECRET`, `JWT_EXPIRY`
-- Optional Azure keys (`AZURE_OPENAI_*`, `AZURE_STORAGE_*`, `AZURE_SEARCH_*`)
-- `FRONTEND_URL`, `PORT`
-
-Frontend variables:
-
-- `VITE_API_URL` (defaults to `http://localhost:5000/api` if omitted)
-
-> **Shared credentials already provided**: this repository now includes ready-to-use `.env` files pointing at the production Supabase project and Azure OpenAI deployment. Anyone with repo access can read/write the shared database and consume Azure tokens—treat these secrets with care.
+5. **Log in with seeded accounts**
+   - Instructor: `sakshi@example.com` / `sakshi123`
+   - Student: `mayank@example.com` / `mayank123`
 
 ### Database Setup
 
