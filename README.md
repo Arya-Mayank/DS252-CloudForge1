@@ -58,6 +58,8 @@ Frontend variables:
 
 - `VITE_API_URL` (defaults to `http://localhost:5000/api` if omitted)
 
+> **Shared credentials already provided**: this repository now includes ready-to-use `.env` files pointing at the production Supabase project and Azure OpenAI deployment. Anyone with repo access can read/write the shared database and consume Azure tokens—treat these secrets with care.
+
 ### Database Setup
 
 1. Follow `database/README.md` for Supabase provisioning and run the SQL scripts in the `database/` folder (at minimum `schema.sql` plus Bloom/assessment migrations).
@@ -131,6 +133,16 @@ DS252-CloudForge1/
 - **Supabase connection failures**: verify `SUPABASE_URL` and `SUPABASE_KEY`, and ensure the schema from `database/` has been applied.
 - **Uploads directory missing**: the repository ships with `backend/uploads/.gitkeep`; ensure your deployment target preserves the folder or configure Azure Blob Storage.
 - **Frontend cannot reach API**: confirm `VITE_API_URL` points to the backend (Vite dev server proxies `/api` to `http://localhost:5000`).
+- **Shared environment files**: the committed `.env` files grant access to the course’s Supabase project and Azure OpenAI deployment. Do not expose the repository publicly.
+
+## Seed Accounts
+
+Use the following accounts to explore the system without creating new users:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Instructor | `sakshi@example.com` | `sakshi123` |
+| Student | `mayank@example.com` | `mayank123` |
 
 ---
 
