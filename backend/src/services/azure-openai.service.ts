@@ -297,7 +297,6 @@ Return a JSON array with this structure:
 
   private getMockSyllabus(documentText: string): SyllabusItem[] {
     // Extract some keywords from document for realistic mock
-    const words = documentText.split(/\s+/).slice(0, 20);
     const hasIntro = documentText.toLowerCase().includes('introduction');
     
     return [
@@ -374,34 +373,42 @@ Return a JSON array with this structure:
   }
 
   private getMockRecommendations(performanceData: any): Recommendation[] {
+    const focusAreas = Array.isArray(performanceData?.focusAreas)
+      ? performanceData.focusAreas
+      : Array.isArray(performanceData?.weakTopics)
+        ? performanceData.weakTopics
+        : [];
+
+    const [primary = 'Data Structures', secondary = 'Algorithm Complexity', tertiary = 'System Design'] = focusAreas;
+
     return [
       {
-        topic: 'Data Structures',
-        reason: 'Performance analysis shows this area needs improvement (score: 65%)',
+        topic: primary,
+        reason: `Performance analysis shows ${primary} needs improvement`,
         resources: [
-          'Review linked lists and trees',
-          'Complete practice problems on LeetCode',
-          'Watch visualization videos on YouTube'
+          `Review core concepts for ${primary}`,
+          'Complete targeted practice problems',
+          'Watch recommended walkthrough videos'
         ],
         priority: 'high'
       },
       {
-        topic: 'Algorithm Complexity',
-        reason: 'Good understanding but could benefit from more practice (score: 78%)',
+        topic: secondary,
+        reason: `Good understanding of ${secondary}, but more practice is recommended`,
         resources: [
-          'Study Big O notation examples',
-          'Practice time complexity analysis',
-          'Read recommended textbook chapters'
+          `Study foundational materials for ${secondary}`,
+          'Practice with real-world exercises',
+          'Review instructor-provided resources'
         ],
         priority: 'medium'
       },
       {
-        topic: 'System Design',
-        reason: 'Strong performance, continue building on this foundation (score: 92%)',
+        topic: tertiary,
+        reason: `Strong performance in ${tertiary}; continue building expertise`,
         resources: [
-          'Explore advanced patterns',
-          'Read case studies from tech companies',
-          'Attempt design challenges'
+          `Explore advanced patterns related to ${tertiary}`,
+          'Read case studies from industry',
+          'Attempt capstone-style challenges'
         ],
         priority: 'low'
       }
@@ -419,6 +426,7 @@ Return a JSON array with this structure:
       mcqCount: number;
       msqCount: number;
       subjectiveCount: number;
+      bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
     }>;
     courseContext?: string;
     difficultyDistribution?: {
@@ -477,12 +485,21 @@ Return a JSON array with this structure:
 - Use more sophisticated language and complex scenarios
 - Emphasize critical analysis, synthesis, and original problem-solving`;
         
+        // Get Bloom's taxonomy level from subtopic (from syllabus) or use default guidance
+        const bloomLevelGuidance = subtopic.bloom_level 
+          ? `IMPORTANT: This subtopic has Bloom's Taxonomy level "${subtopic.bloom_level}" set by the instructor. 
+          - Generate questions that primarily align with "${subtopic.bloom_level}" level
+          - You may include a few questions at adjacent levels if appropriate
+          - Focus on the cognitive skills required for "${subtopic.bloom_level}" level`
+          : '';
+
         const prompt = `You are an expert assessment designer. Generate questions for a course assessment with Bloom's Taxonomy levels and difficulty distribution.
 
 ${levelGuidance}
 
 Topic: ${subtopic.topicTitle}
 Subtopic: ${subtopic.subtopic}
+${bloomLevelGuidance ? `\n${bloomLevelGuidance}\n` : ''}
 ${params.courseContext ? `Course Context: ${params.courseContext.substring(0, 500)}` : ''}
 
 Generate the following questions:
@@ -569,9 +586,12 @@ Important rules:
         const parsedQuestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
         
         // Add topic and subtopic info to each question
+        // Use subtopic's Bloom level if AI didn't assign one, or if AI assigned different level
         const questionsWithContext = parsedQuestions.map((q: any) => ({
           ...q,
-          bloom_level: q.bloom_level || 'UNDERSTAND', // Default if not provided
+          // Prefer AI-generated bloom_level, but if subtopic has a specific level set, 
+          // ensure questions align with it (or use it as default if AI didn't assign)
+          bloom_level: q.bloom_level || subtopic.bloom_level || 'UNDERSTAND',
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic
         }));
@@ -598,6 +618,7 @@ Important rules:
       mcqCount: number;
       msqCount: number;
       subjectiveCount: number;
+      bloom_level?: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE';
     }>;
   }): {
     questions: Array<{
@@ -620,6 +641,9 @@ Important rules:
     const difficulties: Array<'EASY' | 'MEDIUM' | 'HARD'> = ['EASY', 'MEDIUM', 'HARD'];
 
     for (const subtopic of params.subtopics) {
+      // Use subtopic's Bloom level if set, otherwise use default distribution
+      const subtopicBloomLevel = subtopic.bloom_level || 'UNDERSTAND';
+      
       // Generate MCQs
       for (let i = 0; i < subtopic.mcqCount; i++) {
         allQuestions.push({
@@ -628,7 +652,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: difficulties[i % 3],
-          bloom_level: ['REMEMBER', 'UNDERSTAND', 'APPLY'][i % 3] as any,
+          bloom_level: subtopicBloomLevel,
           options: [
             { label: 'A', text: 'Correct answer for this concept', isCorrect: true },
             { label: 'B', text: 'Incorrect option 1', isCorrect: false },
@@ -648,7 +672,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: difficulties[(i + 1) % 3],
-          bloom_level: ['ANALYZE', 'EVALUATE', 'APPLY'][(i + 1) % 3] as any,
+          bloom_level: subtopicBloomLevel,
           options: [
             { label: 'A', text: 'First correct statement', isCorrect: true },
             { label: 'B', text: 'Second correct statement', isCorrect: true },
@@ -669,7 +693,7 @@ Important rules:
           topicTitle: subtopic.topicTitle,
           subtopic: subtopic.subtopic,
           difficulty: 'HARD',
-          bloom_level: ['EVALUATE', 'CREATE', 'ANALYZE'][i % 3] as any,
+          bloom_level: subtopicBloomLevel,
           explanation: `Look for clear explanations, practical examples, and understanding of core concepts in ${subtopic.subtopic}`,
           points: 5
         });

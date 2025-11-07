@@ -15,7 +15,7 @@
   },
   "keywords": ["lms", "ai", "azure", "education"],
   "author": "",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "@azure/openai": "^1.0.0-beta.12",
     "@azure/search-documents": "^12.0.0",

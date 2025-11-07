@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { assessmentsAPI, Assessment, Question } from '../../api/assessments';
@@ -26,13 +26,7 @@ export const AssessmentAnalysis = () => {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (assessmentId) {
-      loadAssessmentData();
-    }
-  }, [assessmentId]);
-
-  const loadAssessmentData = async () => {
+  const loadAssessmentData = useCallback(async () => {
     try {
       // Get assessment details
       const assessmentData = await assessmentsAPI.getById(assessmentId!);
@@ -98,7 +92,13 @@ export const AssessmentAnalysis = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [assessmentId, navigate]);
+
+  useEffect(() => {
+    if (assessmentId) {
+      loadAssessmentData();
+    }
+  }, [assessmentId, loadAssessmentData]);
 
   const generateQuestionAnalysis = async (questionIndex: number) => {
     const analysisResult = analysisResults[questionIndex];

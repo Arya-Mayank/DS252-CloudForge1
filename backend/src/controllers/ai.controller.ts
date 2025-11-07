@@ -3,9 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import azureOpenAIService from '../services/azure-openai.service';
 import azureSearchService from '../services/azure-search.service';
 import courseModel from '../models/course.model';
-import assessmentModel from '../models/assessment.model';
 import { parseDocument, chunkText } from '../utils/fileParser';
-import path from 'path';
 
 /**
  * Generate syllabus from uploaded document
@@ -124,7 +122,7 @@ export const generateAssessment = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { courseId, topics, questionCount = 10, assessmentTitle } = req.body;
+    const { courseId, topics, questionCount = 10 } = req.body;
 
     if (!courseId || !topics || !Array.isArray(topics) || topics.length === 0) {
       res.status(400).json({ error: 'Course ID and topics array are required' });
@@ -171,7 +169,7 @@ export const generateRecommendations = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    const { studentId, courseId } = req.body;
+    const { studentId } = req.body;
 
     // If no studentId provided, use current user (must be student)
     const targetStudentId = studentId || req.user.id;

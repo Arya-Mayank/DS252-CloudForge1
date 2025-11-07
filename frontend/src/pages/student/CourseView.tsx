@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { coursesAPI } from '../../api/courses';
@@ -18,27 +18,7 @@ export const StudentCourseView = () => {
   const [studentAttempts, setStudentAttempts] = useState<{ [assessmentId: string]: StudentAttempt[] }>({});
   const [completedAssessmentId, setCompletedAssessmentId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadCourse();
-    
-    // Check if we just completed an assessment
-    const urlParams = new URLSearchParams(location.search);
-    const assessmentCompleted = urlParams.get('assessmentCompleted');
-    if (assessmentCompleted) {
-      setCompletedAssessmentId(assessmentCompleted);
-      setActiveTab('assessments'); // Switch to assessments tab
-      // Clear the URL parameter
-      navigate(location.pathname, { replace: true });
-    }
-  }, [id, location.search, location.pathname, navigate]);
-
-  useEffect(() => {
-    if (activeTab === 'assessments') {
-      loadAssessments();
-    }
-  }, [activeTab, id]);
-
-  const loadCourse = async () => {
+  const loadCourse = useCallback(async () => {
     if (!id) return;
     try {
       const data = await coursesAPI.getById(id);
@@ -50,9 +30,9 @@ export const StudentCourseView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
 
-  const loadAssessments = async () => {
+  const loadAssessments = useCallback(async () => {
     if (!id) return;
     setLoadingAssessments(true);
     try {
@@ -79,7 +59,27 @@ export const StudentCourseView = () => {
     } finally {
       setLoadingAssessments(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadCourse();
+    
+    // Check if we just completed an assessment
+    const urlParams = new URLSearchParams(location.search);
+    const assessmentCompleted = urlParams.get('assessmentCompleted');
+    if (assessmentCompleted) {
+      setCompletedAssessmentId(assessmentCompleted);
+      setActiveTab('assessments'); // Switch to assessments tab
+      // Clear the URL parameter
+      navigate(location.pathname, { replace: true });
+    }
+  }, [id, location.search, location.pathname, navigate, loadCourse]);
+
+  useEffect(() => {
+    if (activeTab === 'assessments') {
+      loadAssessments();
+    }
+  }, [activeTab, loadAssessments]);
 
   if (loading) {
     return (
@@ -106,7 +106,8 @@ export const StudentCourseView = () => {
     );
   }
 
-  const hasSyllabus = course.syllabus && Array.isArray(course.syllabus) && course.syllabus.length > 0;
+  const hasSyllabus = Array.isArray(course.syllabus) && course.syllabus.length > 0;
+  const syllabusItems = Array.isArray(course.syllabus) ? course.syllabus : [];
   const isSyllabusPublished = course.is_published;
 
   return (
@@ -211,7 +212,7 @@ export const StudentCourseView = () => {
                     </p>
                   </div>
 
-                  {course.syllabus.map((item: any, index: number) => (
+                  {syllabusItems.map((item: any, index: number) => (
                     <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                       <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-4 border-b border-primary-200">
                         <div className="flex items-center justify-between">
@@ -223,14 +224,17 @@ export const StudentCourseView = () => {
                       </div>
                       <div className="px-6 py-4">
                         <ul className="space-y-2">
-                          {item.subtopics.map((subtopic: string, subIndex: number) => (
-                            <li key={subIndex} className="flex items-start space-x-3">
-                              <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              <span className="text-gray-700">{subtopic}</span>
-                            </li>
-                          ))}
+                          {item.subtopics.map((subtopic: any, subIndex: number) => {
+                            const subtopicLabel = typeof subtopic === 'string' ? subtopic : subtopic.subtopic;
+                            return (
+                              <li key={subIndex} className="flex items-start space-x-3">
+                                <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-gray-700">{subtopicLabel}</span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     </div>

@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import userModel from '../models/user.model';
-import { jwtConfig } from '../config/jwt.config';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 /**

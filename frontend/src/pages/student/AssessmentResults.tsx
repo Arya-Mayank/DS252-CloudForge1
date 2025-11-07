@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
-import { assessmentsAPI, Assessment, Question } from '../../api/assessments';
+import { Assessment, Question } from '../../api/assessments';
 import { studentAssessmentsAPI } from '../../api/student-assessments';
 import { aiFeedbackAPI } from '../../api/ai-feedback';
 
@@ -30,50 +30,11 @@ export const AssessmentResults = () => {
   const [answers, setAnswers] = useState<{ [questionId: string]: any }>({});
   const [results, setResults] = useState<AssessmentResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generatingFeedback, setGeneratingFeedback] = useState(false);
   const [generatingQuestions, setGeneratingQuestions] = useState<{ [questionId: string]: boolean }>({});
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [backendResults, setBackendResults] = useState<any>(null);
 
-  useEffect(() => {
-    console.log('AssessmentResults useEffect triggered:', {
-      hasLocationState: !!location.state,
-      hasLocationStateResults: !!(location.state && location.state.results),
-      assessmentId,
-      attemptId,
-      locationState: location.state
-    });
-
-    if (location.state && location.state.results) {
-      // New backend results
-      console.log('Loading from location.state.results');
-      const { results: backendData } = location.state;
-      setBackendResults(backendData);
-      setAssessment(backendData.assessment);
-      setQuestions(backendData.questions);
-      setStartTime(new Date(backendData.attempt.started_at));
-      calculateResultsFromBackend(backendData);
-    } else if (location.state) {
-      // Legacy frontend-only results
-      console.log('Loading from legacy location.state');
-      const { answers: stateAnswers, questions: stateQuestions, assessment: stateAssessment, startTime: stateStartTime } = location.state;
-      setAnswers(stateAnswers);
-      setQuestions(stateQuestions);
-      setAssessment(stateAssessment);
-      setStartTime(stateStartTime);
-      calculateResults();
-    } else if (assessmentId && attemptId) {
-      // Load from backend using attempt ID
-      console.log('Loading from backend using attempt ID');
-      loadResultsFromBackend();
-    } else {
-      // If no state and no attempt ID, redirect back to assessment
-      console.log('No data available, redirecting to assessment');
-      navigate(`/student/assessment/${assessmentId}`);
-    }
-  }, [location.state, assessmentId, attemptId, navigate]);
-
-  const calculateResults = async () => {
+  const calculateResults = useCallback(async () => {
     setLoading(true);
     try {
       const calculatedResults: AssessmentResult[] = [];
@@ -117,35 +78,9 @@ export const AssessmentResults = () => {
       console.error('Error calculating results:', error);
       setLoading(false);
     }
-  };
+  }, [answers, questions]);
 
-  const loadResultsFromBackend = async () => {
-    if (!assessmentId || !attemptId) {
-      console.error('Missing assessmentId or attemptId:', { assessmentId, attemptId });
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      console.log('Loading results from backend for:', { assessmentId, attemptId });
-      const results = await studentAssessmentsAPI.getAssessmentResults(assessmentId, attemptId);
-      console.log('Backend results loaded:', results);
-      
-      setBackendResults(results);
-      setAssessment(results.assessment);
-      setQuestions(results.questions);
-      setStartTime(new Date(results.attempt.started_at));
-      calculateResultsFromBackend(results);
-    } catch (error) {
-      console.error('Failed to load results from backend:', error);
-      alert(`Failed to load assessment results: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      navigate('/student/dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateResultsFromBackend = (backendData: any) => {
+  const calculateResultsFromBackend = useCallback((backendData: any) => {
     try {
       console.log('Calculating results from backend data:', backendData);
       const calculatedResults: AssessmentResult[] = [];
@@ -169,7 +104,71 @@ export const AssessmentResults = () => {
       console.error('Error calculating results from backend:', error);
       setLoading(false);
     }
-  };
+  }, []);
+
+  const loadResultsFromBackend = useCallback(async () => {
+    if (!assessmentId || !attemptId) {
+      console.error('Missing assessmentId or attemptId:', { assessmentId, attemptId });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      console.log('Loading results from backend for:', { assessmentId, attemptId });
+      const results = await studentAssessmentsAPI.getAssessmentResults(assessmentId, attemptId);
+      console.log('Backend results loaded:', results);
+      
+      setBackendResults(results);
+      setAssessment(results.assessment);
+      setQuestions(results.questions);
+      setStartTime(new Date(results.attempt.started_at));
+      calculateResultsFromBackend(results);
+    } catch (error) {
+      console.error('Failed to load results from backend:', error);
+      alert(`Failed to load assessment results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      navigate('/student/dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [assessmentId, attemptId, navigate, calculateResultsFromBackend]);
+
+  useEffect(() => {
+    console.log('AssessmentResults useEffect triggered:', {
+      hasLocationState: !!location.state,
+      hasLocationStateResults: !!(location.state && location.state.results),
+      assessmentId,
+      attemptId,
+      locationState: location.state
+    });
+
+    if (location.state && location.state.results) {
+      // New backend results
+      console.log('Loading from location.state.results');
+      const { results: backendData } = location.state;
+      setBackendResults(backendData);
+      setAssessment(backendData.assessment);
+      setQuestions(backendData.questions);
+      setStartTime(new Date(backendData.attempt.started_at));
+      calculateResultsFromBackend(backendData);
+    } else if (location.state) {
+      // Legacy frontend-only results
+      console.log('Loading from legacy location.state');
+      const { answers: stateAnswers, questions: stateQuestions, assessment: stateAssessment, startTime: stateStartTime } = location.state;
+      setAnswers(stateAnswers);
+      setQuestions(stateQuestions);
+      setAssessment(stateAssessment);
+      setStartTime(stateStartTime);
+      calculateResults();
+    } else if (assessmentId && attemptId) {
+      // Load from backend using attempt ID
+      console.log('Loading from backend using attempt ID');
+      loadResultsFromBackend();
+    } else {
+      // If no state and no attempt ID, redirect back to assessment
+      console.log('No data available, redirecting to assessment');
+      navigate(`/student/assessment/${assessmentId}`);
+    }
+  }, [location.state, assessmentId, attemptId, navigate, loadResultsFromBackend, calculateResults, calculateResultsFromBackend]);
 
   const generateAdditionalQuestion = async (questionId: string, isCorrect: boolean) => {
     setGeneratingQuestions(prev => ({ ...prev, [questionId]: true }));
@@ -315,7 +314,6 @@ export const AssessmentResults = () => {
 
   const score = getScore();
   const subtopicRecommendations = getSubtopicRecommendations();
-  const endTime = new Date();
 
   return (
     <Layout>
@@ -405,8 +403,8 @@ export const AssessmentResults = () => {
                   Based on your performance, we recommend reviewing these topics:
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {subtopicRecommendations.map((subtopic, index) => (
-                    <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                  {subtopicRecommendations.map((subtopic) => (
+                    <span key={subtopic} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
                       {subtopic}
                     </span>
                   ))}
@@ -420,7 +418,7 @@ export const AssessmentResults = () => {
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-gray-900">Question Review</h2>
           
-          {results.map((result, index) => (
+          {results.map((result) => (
             <div key={result.question.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {/* Question Header */}
               <div className={`px-6 py-4 border-b ${

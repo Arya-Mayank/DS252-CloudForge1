@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { assessmentsAPI, Assessment, Question } from '../api/assessments';
 
 interface QuestionViewerModalProps {
@@ -19,13 +19,7 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
   const [savingToBank, setSavingToBank] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && assessment.id) {
-      loadQuestions();
-    }
-  }, [isOpen, assessment.id]);
-
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -37,7 +31,13 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [assessment.id]);
+
+  useEffect(() => {
+    if (isOpen && assessment.id) {
+      loadQuestions();
+    }
+  }, [isOpen, assessment.id, loadQuestions]);
 
   const getDifficultyColor = (difficulty?: string) => {
     switch (difficulty) {
@@ -177,7 +177,7 @@ export const QuestionViewerModal: React.FC<QuestionViewerModalProps> = ({
             </div>
           ) : (
             <div className="p-6 space-y-6">
-              {questions.map((question, index) => (
+              {questions.map((question) => (
                 <div key={question.id} className={`bg-white border rounded-lg p-6 shadow-sm ${
                   selectedQuestions.has(question.id) ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200'
                 }`}>

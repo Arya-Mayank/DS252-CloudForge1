@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Question } from '../types';
+import { Assessment, Question } from './assessments';
 
 export interface StudentAttempt {
   id: string;
@@ -51,7 +51,8 @@ export interface AssessmentResults {
     timeTakenMinutes?: number;
   };
   answers: StudentAnswer[];
-  questions: any[];
+  questions: Question[];
+  assessment: Assessment;
 }
 
 export const studentAssessmentsAPI = {
@@ -145,12 +146,14 @@ export const studentAssessmentsAPI = {
     pointsEarned: number;
     nextQuestion: Question | null;
     isComplete: boolean;
+    isPendingEvaluation?: boolean;
   }> => {
     const response = await apiClient.post<{
       isCorrect: boolean;
       pointsEarned: number;
       nextQuestion: Question | null;
       isComplete: boolean;
+      isPendingEvaluation?: boolean;
     }>(`/student/assessments/${assessmentId}/attempts/${attemptId}/submit-answer`, data);
     return response.data;
   },

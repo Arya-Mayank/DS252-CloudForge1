@@ -51,7 +51,7 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
 
     console.log(`✅ Assessment created with ID: ${assessment.id}`);
 
-    // Step 2: Prepare subtopic data with topic IDs
+    // Step 2: Prepare subtopic data with topic IDs and Bloom's taxonomy levels
     const enrichedSubtopics = await Promise.all(
       subtopics.map(async (st: any) => {
         // Find topic and subtopic IDs from database
@@ -59,10 +59,16 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
         const topic = topics.find((t: Topic) => t.title === st.topicTitle);
         
         let subtopic_id = null;
+        let bloom_level: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | undefined = undefined;
+        let topic_bloom_level: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE' | 'CREATE' | undefined = undefined;
+        
         if (topic && topic.id) {
+          topic_bloom_level = topic.bloom_level || undefined;
           const subtopicsFromDb = await topicModel.findSubtopicsByTopic(topic.id);
           const subtopic = subtopicsFromDb.find((s: Subtopic) => s.title === st.subtopic);
           subtopic_id = subtopic?.id || null;
+          // Get Bloom's taxonomy level from subtopic (preferred) or topic (fallback)
+          bloom_level = subtopic?.bloom_level || topic_bloom_level;
         }
 
         return {
@@ -72,7 +78,8 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
           msqCount: st.msqCount || 0,
           subjectiveCount: st.subjectiveCount || 0,
           topic_id: topic?.id || null,
-          subtopic_id
+          subtopic_id,
+          bloom_level // Include Bloom's taxonomy level from syllabus
         };
       })
     );

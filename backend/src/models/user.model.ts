@@ -135,8 +135,9 @@ class UserModel {
    * Remove password_hash from user object for API responses
    */
   private sanitizeUser(user: any): User {
-    const { password_hash, ...sanitized } = user;
-    return sanitized;
+    const sanitizedUser: any = { ...user };
+    delete sanitizedUser.password_hash;
+    return sanitizedUser as User;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { coursesAPI } from '../../api/courses';
@@ -13,11 +13,7 @@ export const CourseDetail = () => {
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    loadCourse();
-  }, [id]);
-
-  const loadCourse = async () => {
+  const loadCourse = useCallback(async () => {
     if (!id) return;
     try {
       const data = await coursesAPI.getById(id);
@@ -27,7 +23,11 @@ export const CourseDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadCourse();
+  }, [loadCourse]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !id) return;
@@ -192,9 +192,12 @@ export const CourseDetail = () => {
                   <h3 className="font-semibold text-lg">{item.topic}</h3>
                   <p className="text-sm text-gray-600">Estimated: {item.estimatedHours} hours</p>
                   <ul className="list-disc list-inside text-gray-700 mt-2">
-                    {item.subtopics.map((subtopic: string, subIndex: number) => (
-                      <li key={subIndex}>{subtopic}</li>
-                    ))}
+                    {item.subtopics.map((subtopic, subIndex) => {
+                      const subtopicText = typeof subtopic === 'string' ? subtopic : subtopic.subtopic;
+                      return (
+                        <li key={subIndex}>{subtopicText}</li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}

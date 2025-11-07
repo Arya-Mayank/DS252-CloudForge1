@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { coursesAPI } from '../../api/courses';
@@ -41,11 +41,7 @@ export const CourseBuilder = () => {
     syllabusGeneration: false,
   });
 
-  useEffect(() => {
-    loadCourse();
-  }, [id]);
-
-  const loadCourse = async () => {
+  const loadCourse = useCallback(async () => {
     if (!id) return;
     try {
       const data = await coursesAPI.getById(id);
@@ -69,7 +65,11 @@ export const CourseBuilder = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadCourse();
+  }, [loadCourse]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -325,18 +325,6 @@ export const CourseBuilder = () => {
     }
   };
 
-  const getBloomLevelLabel = (level?: string) => {
-    if (!level) return null;
-    const labels: Record<string, string> = {
-      'REMEMBER': 'Remember',
-      'UNDERSTAND': 'Understand',
-      'APPLY': 'Apply',
-      'ANALYZE': 'Analyze',
-      'EVALUATE': 'Evaluate',
-      'CREATE': 'Create',
-    };
-    return labels[level] || level;
-  };
 
   const bloomLevels: Array<{ value: string; label: string }> = [
     { value: '', label: 'None' },

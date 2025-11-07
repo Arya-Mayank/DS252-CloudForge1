@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -72,12 +72,14 @@ app.use((req: Request, res: Response) => {
 });
 
 // Global error handler
-app.use((err: any, _req: Request, res: Response, _next: any) => {
-  console.error('Global error handler:', err);
-  
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  void _next;
+  const normalizedError = err as { status?: number; message?: string; stack?: string };
+  console.error('Global error handler:', normalizedError);
+
+  res.status(normalizedError.status || 500).json({
+    error: normalizedError.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: normalizedError.stack })
   });
 });
 

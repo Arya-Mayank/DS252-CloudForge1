@@ -373,7 +373,8 @@ export const submitAnswerAndGetNext = async (req: AuthRequest, res: Response): P
       isCorrect: result.isCorrect,
       pointsEarned: result.pointsEarned,
       nextQuestion: result.nextQuestion,
-      isComplete: result.isComplete
+      isComplete: result.isComplete,
+      isPendingEvaluation: result.isPendingEvaluation || false
     });
 
   } catch (error) {

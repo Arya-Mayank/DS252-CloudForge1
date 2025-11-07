@@ -62,8 +62,8 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
     }
 
     const selected = Array.from(selectedSubtopics.entries())
-      .filter(([_, isSelected]) => isSelected)
-      .map(([key, _]) => {
+      .filter(([, isSelected]) => isSelected)
+      .map(([key]) => {
         const [topicTitle, subtopic] = key.split('|||');
         return { topicTitle, subtopic };
       });

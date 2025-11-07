@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { assessmentsAPI, Assessment, Question as QuestionType } from '../../api/assessments';
@@ -22,29 +22,7 @@ export const TakeAssessment = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastAnswerCorrect, setLastAnswerCorrect] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    if (assessmentId) {
-      loadAssessment();
-    }
-  }, [assessmentId]);
-
-  useEffect(() => {
-    if (assessment?.time_limit_minutes && startTime) {
-      const timer = setInterval(() => {
-        const elapsed = Date.now() - startTime.getTime();
-        const remaining = assessment.time_limit_minutes * 60 * 1000 - elapsed;
-        if (remaining <= 0) {
-          setTimeRemaining(0);
-          handleCompleteAssessment();
-        } else {
-          setTimeRemaining(Math.floor(remaining / 1000));
-        }
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [assessment?.time_limit_minutes, startTime]);
-
-  const loadAssessment = async () => {
+  const loadAssessment = useCallback(async () => {
     if (!assessmentId) return;
     setLoading(true);
     try {
@@ -76,7 +54,38 @@ export const TakeAssessment = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [assessmentId, navigate]);
+
+  useEffect(() => {
+    if (assessmentId) {
+      loadAssessment();
+    }
+  }, [assessmentId, loadAssessment]);
+
+  const handleCompleteAssessment = useCallback(async () => {
+    if (!attemptId || !assessmentId) {
+      return;
+    }
+
+    navigate(`/student/course/${assessment?.course_id}?assessmentCompleted=${assessmentId}`);
+  }, [assessment?.course_id, assessmentId, attemptId, navigate]);
+
+  useEffect(() => {
+    const timeLimit = assessment?.time_limit_minutes;
+    if (timeLimit && startTime) {
+      const timer = setInterval(() => {
+        const elapsed = Date.now() - startTime.getTime();
+        const remaining = timeLimit * 60 * 1000 - elapsed;
+        if (remaining <= 0) {
+          setTimeRemaining(0);
+          handleCompleteAssessment();
+        } else {
+          setTimeRemaining(Math.floor(remaining / 1000));
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [assessment?.time_limit_minutes, startTime, handleCompleteAssessment]);
 
   const handleAnswerChange = (answer: any) => {
     setCurrentAnswer(answer);
@@ -122,9 +131,15 @@ export const TakeAssessment = () => {
         answerData
       );
 
-      // Show feedback briefly
-      setLastAnswerCorrect(result.isCorrect);
-      setShowFeedback(true);
+      // Show feedback briefly (skip for subjective questions being evaluated in background)
+      if (!result.isPendingEvaluation) {
+        setLastAnswerCorrect(result.isCorrect);
+        setShowFeedback(true);
+      } else {
+        // For subjective questions, show a different message
+        setLastAnswerCorrect(null);
+        setShowFeedback(true);
+      }
       setAnsweredCount(prev => prev + 1);
 
       // Wait a moment to show feedback, then proceed
@@ -150,15 +165,6 @@ export const TakeAssessment = () => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleCompleteAssessment = async () => {
-    if (!attemptId || !assessmentId) {
-      return;
-    }
-
-    // Navigate to results page
-    navigate(`/student/course/${assessment?.course_id}?assessmentCompleted=${assessmentId}`);
   };
 
   const formatTime = (seconds: number) => {
@@ -232,24 +238,36 @@ export const TakeAssessment = () => {
         </div>
 
         {/* Feedback Banner */}
-        {showFeedback && lastAnswerCorrect !== null && (
+        {showFeedback && (
           <div className={`mb-6 p-4 rounded-lg ${
-            lastAnswerCorrect ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'
+            lastAnswerCorrect === true 
+              ? 'bg-green-100 border border-green-300' 
+              : lastAnswerCorrect === false
+              ? 'bg-red-100 border border-red-300'
+              : 'bg-blue-100 border border-blue-300'
           }`}>
             <div className="flex items-center space-x-2">
-              {lastAnswerCorrect ? (
+              {lastAnswerCorrect === true ? (
                 <>
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span className="text-green-800 font-semibold">Correct! Well done!</span>
                 </>
-              ) : (
+              ) : lastAnswerCorrect === false ? (
                 <>
                   <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span className="text-red-800 font-semibold">Incorrect. Keep trying!</span>
+                </>
+              ) : (
+                <>
+                  <svg className="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-blue-800 font-semibold">Answer submitted! Evaluation in progress...</span>
                 </>
               )}
             </div>

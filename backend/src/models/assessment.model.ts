@@ -439,12 +439,8 @@ class AssessmentModel {
 
         if (question) {
           if (question.question_type === 'SUBJECTIVE') {
-            // For subjective questions, use AI to evaluate the answer
-            isCorrect = await this.evaluateSubjectiveAnswer(
-              answer.answerText || '', 
-              question.question_text, 
-              question.explanation || ''
-            );
+            // For subjective questions, use heuristic evaluation (AI placeholder)
+            isCorrect = await this.evaluateSubjectiveAnswer(answer.answerText || '');
           } else {
             // For MCQ/MSQ, check against correct options
             const { data: correctOptions } = await supabase
@@ -616,6 +612,7 @@ class AssessmentModel {
 
   /**
    * Get next question adaptively based on student performance
+   * Optimized to minimize database queries
    */
   async getNextAdaptiveQuestion(
     attemptId: string,
@@ -624,25 +621,32 @@ class AssessmentModel {
   ): Promise<Question & { options?: QuestionOption[] } | null> {
     const supabase = getSupabaseClient();
 
-    // Get attempt details
-    const { data: attempt } = await supabase
+    // Get attempt details and answered questions in parallel
+    const attemptPromise = supabase
       .from(this.attemptsTable)
       .select('assessment_id, student_id')
       .eq('id', attemptId)
       .single();
 
-    if (!attempt) throw new Error('Attempt not found');
-
-    // Get all questions for this assessment
-    const allQuestions = await this.getQuestions(attempt.assessment_id);
-
-    // Get already answered questions
-    const { data: answeredQuestions } = await supabase
+    const answeredQuestionsPromise = supabase
       .from(this.answersTable)
       .select('question_id')
       .eq('attempt_id', attemptId);
 
-    const answeredQuestionIds = new Set((answeredQuestions || []).map(a => a.question_id));
+    const [attemptResult, answeredQuestionsResult] = await Promise.all([
+      attemptPromise,
+      answeredQuestionsPromise
+    ]);
+
+    const { data: attempt } = attemptResult;
+    if (!attempt) throw new Error('Attempt not found');
+
+    const answeredQuestionIds = new Set(
+      (answeredQuestionsResult.data || []).map(a => a.question_id)
+    );
+
+    // Get all questions for this assessment (with options)
+    const allQuestions = await this.getQuestions(attempt.assessment_id);
 
     // Filter out already answered questions
     const availableQuestions = allQuestions.filter(q => !answeredQuestionIds.has(q.id));
@@ -731,6 +735,7 @@ class AssessmentModel {
 
   /**
    * Submit a single answer and get next question
+   * Optimized for fast MCQ/MSQ evaluation using database lookups
    */
   async submitAnswerAndGetNext(
     attemptId: string,
@@ -745,90 +750,178 @@ class AssessmentModel {
     pointsEarned: number;
     nextQuestion: (Question & { options?: QuestionOption[] }) | null;
     isComplete: boolean;
+    isPendingEvaluation?: boolean; // For subjective questions evaluated in background
   }> {
     const supabase = getSupabaseClient();
 
-    // Get question details
-    const { data: question } = await supabase
+    // Get question details and correct options in parallel for MCQ/MSQ
+    const questionPromise = supabase
       .from(this.questionsTable)
       .select('points, question_type, question_text, explanation, difficulty, topic_id')
       .eq('id', questionId)
       .single();
 
+    // Pre-fetch correct options for MCQ/MSQ (optimization)
+    const correctOptionsPromise = supabase
+      .from(this.optionsTable)
+      .select('id')
+      .eq('question_id', questionId)
+      .eq('is_correct', true);
+
+    // Wait for both queries in parallel
+    const [questionResult, correctOptionsResult] = await Promise.all([
+      questionPromise,
+      correctOptionsPromise
+    ]);
+
+    const { data: question } = questionResult;
     if (!question) throw new Error('Question not found');
 
-    // Calculate correctness
+    // Fast evaluation for MCQ/MSQ using database data
     let isCorrect = false;
     let pointsEarned = 0;
+    let isPendingEvaluation = false;
 
     if (question.question_type === 'SUBJECTIVE') {
-      // For subjective, evaluate with AI (simplified - in production you might want immediate feedback)
-      isCorrect = await this.evaluateSubjectiveAnswer(
-        answer.answerText || '',
-        question.question_text,
-        question.explanation || ''
-      );
-    } else {
-      // For MCQ/MSQ, check against correct options
-      const { data: correctOptions } = await supabase
-        .from(this.optionsTable)
-        .select('id')
-        .eq('question_id', questionId)
-        .eq('is_correct', true);
+      // For subjective questions: save immediately, evaluate in background
+      // Return immediately with pending status
+      isPendingEvaluation = true;
+      isCorrect = false; // Will be updated in background
+      pointsEarned = 0; // Will be updated in background
+      
+      // Save answer as pending evaluation
+      const { error: answerError } = await supabase
+        .from(this.answersTable)
+        .insert({
+          attempt_id: attemptId,
+          question_id: questionId,
+          text_answer: answer.answerText,
+          selected_option_ids: null,
+          is_correct: false, // Temporary, will be updated in background
+          points_earned: 0
+        });
 
-      if (correctOptions) {
+      if (answerError) throw new Error(`Failed to save answer: ${answerError.message}`);
+
+      // Evaluate in background (don't wait for it)
+      this.evaluateSubjectiveAnswerInBackground(
+        attemptId,
+        questionId,
+        answer.answerText || '',
+        question.points
+      ).catch(err => {
+        console.error('Background evaluation error:', err);
+      });
+
+    } else {
+      // For MCQ/MSQ: Fast evaluation using pre-fetched correct options
+      const { data: correctOptions } = correctOptionsResult;
+      
+      if (correctOptions && correctOptions.length > 0) {
         const correctOptionIds = correctOptions.map(opt => opt.id);
         const selectedIds = answer.selectedOptionIds || [];
         
         if (question.question_type === 'MCQ') {
+          // MCQ: exactly one correct answer selected
           isCorrect = selectedIds.length === 1 && correctOptionIds.includes(selectedIds[0]);
         } else if (question.question_type === 'MSQ') {
+          // MSQ: all correct answers selected, no incorrect ones
           isCorrect = selectedIds.length === correctOptionIds.length && 
                      selectedIds.every(id => correctOptionIds.includes(id));
         }
       }
+
+      pointsEarned = isCorrect ? question.points : 0;
+
+      // Save answer immediately
+      const { error: answerError } = await supabase
+        .from(this.answersTable)
+        .insert({
+          attempt_id: attemptId,
+          question_id: questionId,
+          text_answer: null,
+          selected_option_ids: answer.selectedOptionIds,
+          is_correct: isCorrect,
+          points_earned: pointsEarned
+        });
+
+      if (answerError) throw new Error(`Failed to save answer: ${answerError.message}`);
     }
 
-    pointsEarned = isCorrect ? question.points : 0;
-
-    // Save answer
-    const { error: answerError } = await supabase
-      .from(this.answersTable)
-      .insert({
-        attempt_id: attemptId,
-        question_id: questionId,
-        text_answer: answer.answerText,
-        selected_option_ids: answer.selectedOptionIds,
-        is_correct: isCorrect,
-        points_earned: pointsEarned
-      });
-
-    if (answerError) throw new Error(`Failed to save answer: ${answerError.message}`);
-
-    // Get next question adaptively
-    const nextQuestion = await this.getNextAdaptiveQuestion(attemptId, questionId, isCorrect);
-
-    // Check if assessment is complete
-    const { data: attempt } = await supabase
+    // Get next question adaptively (optimized to run in parallel with completion check)
+    const nextQuestionPromise = this.getNextAdaptiveQuestion(attemptId, questionId, isCorrect);
+    
+    // Check if assessment is complete (parallel with next question fetch)
+    const attemptPromise = supabase
       .from(this.attemptsTable)
       .select('assessment_id')
       .eq('id', attemptId)
       .single();
 
-    const allQuestions = await this.getQuestions(attempt?.assessment_id || '');
+    const [nextQuestion, attemptResult] = await Promise.all([
+      nextQuestionPromise,
+      attemptPromise
+    ]);
+
+    const { data: attempt } = attemptResult;
+    
+    // Quick check for completion (only count answered questions)
     const { data: answeredQuestions } = await supabase
       .from(this.answersTable)
       .select('question_id')
       .eq('attempt_id', attemptId);
 
-    const isComplete = (answeredQuestions?.length || 0) >= allQuestions.length;
+    // Get total question count using count query
+    const { count: questionCount } = await supabase
+      .from(this.questionsTable)
+      .select('*', { count: 'exact', head: true })
+      .eq('assessment_id', attempt?.assessment_id || '');
+
+    const isComplete = (answeredQuestions?.length || 0) >= (questionCount || 0);
 
     return {
       isCorrect,
       pointsEarned,
       nextQuestion,
-      isComplete
+      isComplete,
+      isPendingEvaluation
     };
+  }
+
+  /**
+   * Evaluate subjective answer in background and update the database
+   */
+  private async evaluateSubjectiveAnswerInBackground(
+    attemptId: string,
+    questionId: string,
+    studentAnswer: string,
+    points: number
+  ): Promise<void> {
+    try {
+      // Evaluate the answer
+      const isCorrect = await this.evaluateSubjectiveAnswer(studentAnswer);
+
+      const pointsEarned = isCorrect ? points : 0;
+
+      // Update the answer record with evaluation results
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from(this.answersTable)
+        .update({
+          is_correct: isCorrect,
+          points_earned: pointsEarned
+        })
+        .eq('attempt_id', attemptId)
+        .eq('question_id', questionId);
+
+      if (error) {
+        console.error('Failed to update subjective answer evaluation:', error);
+      } else {
+        console.log(`✅ Background evaluation complete for question ${questionId}: ${isCorrect ? 'Correct' : 'Incorrect'}`);
+      }
+    } catch (error) {
+      console.error('Error in background evaluation:', error);
+    }
   }
 
   /**
@@ -841,11 +934,7 @@ class AssessmentModel {
   /**
    * Evaluate subjective answer using AI
    */
-  private async evaluateSubjectiveAnswer(
-    studentAnswer: string, 
-    questionText: string, 
-    expectedAnswer: string
-  ): Promise<boolean> {
+  private async evaluateSubjectiveAnswer(studentAnswer: string): Promise<boolean> {
     try {
       // If no answer provided or just "NA", mark as incorrect
       if (!studentAnswer || studentAnswer.trim().length === 0 || 

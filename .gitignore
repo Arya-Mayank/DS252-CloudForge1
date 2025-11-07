@@ -31,9 +31,13 @@ dist/
 Thumbs.db
 
 # Uploads
-uploads/
+backend/uploads/*
+frontend/uploads/*
 *.pdf
 *.docx
+
+# Allow placeholder files
+!backend/uploads/.gitkeep
 
 # Azure
 .azure/
