@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 export interface User {
   id: string;
@@ -26,7 +26,7 @@ class UserModel {
    * Create a new user
    */
   async create(userData: CreateUserDto): Promise<User> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -45,7 +45,7 @@ class UserModel {
    * Find user by email
    */
   async findByEmail(email: string): Promise<User | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -64,7 +64,7 @@ class UserModel {
    * Find user by ID
    */
   async findById(id: string): Promise<User | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -83,7 +83,7 @@ class UserModel {
    * Update user profile
    */
   async update(id: string, updates: Partial<User>): Promise<User> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -103,7 +103,7 @@ class UserModel {
    * Delete user
    */
   async delete(id: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from(this.table)
@@ -117,7 +117,7 @@ class UserModel {
    * Get all users by role
    */
   async findByRole(role: 'instructor' | 'student'): Promise<User[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)

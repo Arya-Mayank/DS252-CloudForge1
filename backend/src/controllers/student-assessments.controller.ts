@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import assessmentModel from '../models/assessment.model';
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 /**
  * Start a student assessment attempt
@@ -243,7 +243,7 @@ export const getNextQuestion = async (req: AuthRequest, res: Response): Promise<
     }
 
     // Get answered questions to determine if this is first or next
-    const { data: answeredQuestions } = await getSupabaseClient()
+    const { data: answeredQuestions } = await requireSupabaseClient()
       .from('student_answers')
       .select('question_id, is_correct')
       .eq('attempt_id', attemptId)
@@ -339,7 +339,7 @@ export const submitAnswerAndGetNext = async (req: AuthRequest, res: Response): P
       }
 
       // Calculate final score
-      const supabase = getSupabaseClient();
+      const supabase = requireSupabaseClient();
       const { data: answers } = await supabase
         .from('student_answers')
         .select('points_earned')

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import assessmentModel from '../models/assessment.model';
 import courseModel from '../models/course.model';
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 /**
  * Get questions from the question bank with filters
@@ -79,7 +79,7 @@ export const deleteQuestionFromBank = async (req: AuthRequest, res: Response): P
     }
 
     const { id } = req.params;
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Get question to verify course ownership
     const { data: question, error: fetchError } = await supabase

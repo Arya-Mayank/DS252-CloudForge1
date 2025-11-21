@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 export interface Topic {
   id: string;
@@ -46,7 +46,7 @@ class TopicModel {
   // ============= TOPICS =============
 
   async createTopic(topicData: CreateTopicDto): Promise<Topic> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.topicsTable)
@@ -62,7 +62,7 @@ class TopicModel {
   }
 
   async createTopicsFromSyllabus(courseId: string, syllabusItems: any[]): Promise<Topic[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // Convert syllabus items to topic records
     const topicsToCreate = syllabusItems.map((item, index) => ({
@@ -101,7 +101,7 @@ class TopicModel {
   }
 
   async findTopicsByCourse(courseId: string): Promise<Topic[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.topicsTable)
@@ -117,7 +117,7 @@ class TopicModel {
   }
 
   async findTopicById(id: string): Promise<Topic | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.topicsTable)
@@ -133,7 +133,7 @@ class TopicModel {
   }
 
   async updateTopic(id: string, updates: Partial<Topic>): Promise<Topic> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.topicsTable)
@@ -150,7 +150,7 @@ class TopicModel {
   }
 
   async deleteTopic(id: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from(this.topicsTable)
@@ -163,7 +163,7 @@ class TopicModel {
   // ============= SUBTOPICS =============
 
   async createSubtopic(subtopicData: CreateSubtopicDto): Promise<Subtopic> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.subtopicsTable)
@@ -182,7 +182,7 @@ class TopicModel {
     topicId: string, 
     subtopicData: Array<{ title: string; bloom_level?: string } | string>
   ): Promise<Subtopic[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const subtopicsToCreate = subtopicData.map((item, index) => ({
       topic_id: topicId,
@@ -204,7 +204,7 @@ class TopicModel {
   }
 
   async findSubtopicsByTopic(topicId: string): Promise<Subtopic[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.subtopicsTable)
@@ -236,7 +236,7 @@ class TopicModel {
   }
 
   async deleteSubtopic(id: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from(this.subtopicsTable)
@@ -249,7 +249,7 @@ class TopicModel {
   // ============= ANALYTICS =============
 
   async getTopicPerformanceForStudent(studentId: string, courseId: string): Promise<any[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // Get all topics for the course
     const topics = await this.findTopicsByCourse(courseId);
@@ -285,7 +285,7 @@ class TopicModel {
     isCorrect: boolean,
     subtopicId?: string
   ): Promise<void> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // Check if record exists
     const { data: existing } = await supabase

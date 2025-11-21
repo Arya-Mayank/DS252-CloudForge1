@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 export interface Course {
   id: string;
@@ -29,7 +29,7 @@ class CourseModel {
    * Create a new course
    */
   async create(courseData: CreateCourseDto): Promise<Course> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -48,7 +48,7 @@ class CourseModel {
    * Find course by ID
    */
   async findById(id: string): Promise<Course | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -67,7 +67,7 @@ class CourseModel {
    * Get all courses (optionally filtered by instructor)
    */
   async findAll(instructorId?: string): Promise<Course[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     let query = supabase.from(this.table).select('*');
     
@@ -88,7 +88,7 @@ class CourseModel {
    * Get courses enrolled by a student
    */
   async findByStudent(studentId: string): Promise<Course[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from('enrollments')
@@ -106,7 +106,7 @@ class CourseModel {
    * Update course
    */
   async update(id: string, updates: Partial<Course>): Promise<Course> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // First check if course exists
     const { data: existingCourse } = await supabase
@@ -162,7 +162,7 @@ class CourseModel {
    * Delete course
    */
   async delete(id: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from(this.table)
@@ -176,7 +176,7 @@ class CourseModel {
    * Enroll a student in a course
    */
   async enrollStudent(studentId: string, courseId: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from('enrollments')
@@ -189,7 +189,7 @@ class CourseModel {
    * Unenroll a student from a course
    */
   async unenrollStudent(studentId: string, courseId: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from('enrollments')
@@ -204,7 +204,7 @@ class CourseModel {
    * Check if student is enrolled in course
    */
   async isEnrolled(studentId: string, courseId: string): Promise<boolean> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from('enrollments')

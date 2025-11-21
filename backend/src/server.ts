@@ -1,5 +1,5 @@
 import app from './app';
-import { testSupabaseConnection } from './config/supabase.config';
+import { testSupabaseConnection, isSupabaseMockMode } from './config/supabase.config';
 import { isAzureMockMode } from './config/azure.config';
 
 const PORT = process.env.PORT || 5000;
@@ -11,12 +11,19 @@ const startServer = async () => {
   try {
     console.log('🚀 Starting DoodleOnMoodle API Server...\n');
 
-    // Test Supabase connection
-    console.log('📊 Testing Supabase connection...');
-    const supabaseConnected = await testSupabaseConnection();
-    if (!supabaseConnected) {
-      console.warn('⚠️  Supabase connection test failed. Please check your credentials.');
-      console.warn('   The server will start, but database operations may fail.\n');
+    // Check Supabase status
+    if (isSupabaseMockMode()) {
+      console.warn('\n⚠️  SUPABASE NOT CONFIGURED');
+      console.warn('   The server will start, but database operations will fail.');
+      console.warn('   Add SUPABASE_URL and SUPABASE_KEY to .env for core functionality.\n');
+    } else {
+      // Test Supabase connection
+      console.log('📊 Testing Supabase connection...');
+      const supabaseConnected = await testSupabaseConnection();
+      if (!supabaseConnected) {
+        console.warn('⚠️  Supabase connection test failed. Please check your credentials.');
+        console.warn('   Database operations may fail.\n');
+      }
     }
 
     // Check Azure services status

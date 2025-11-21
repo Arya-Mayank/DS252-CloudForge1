@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '../config/supabase.config';
+import { requireSupabaseClient } from '../config/supabase.config';
 
 export interface Assessment {
   id: string;
@@ -137,7 +137,7 @@ class AssessmentModel {
    * Create a new assessment
    */
   async create(params: CreateAssessmentParams): Promise<Assessment> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -165,7 +165,7 @@ class AssessmentModel {
    * Find assessment by ID
    */
   async findById(id: string): Promise<Assessment | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -181,7 +181,7 @@ class AssessmentModel {
    * Find all assessments for a course
    */
   async findByCourseId(courseId: string): Promise<Assessment[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -197,7 +197,7 @@ class AssessmentModel {
    * Find all assessments by instructor
    */
   async findByInstructorId(instructorId: string): Promise<Assessment[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -213,7 +213,7 @@ class AssessmentModel {
    * Update assessment
    */
   async update(id: string, updates: Partial<Assessment>): Promise<Assessment> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.table)
@@ -249,7 +249,7 @@ class AssessmentModel {
    * Delete assessment
    */
   async delete(id: string): Promise<void> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from(this.table)
@@ -263,7 +263,7 @@ class AssessmentModel {
    * Create a question for an assessment
    */
   async createQuestion(params: CreateQuestionParams): Promise<Question> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data: question, error: questionError } = await supabase
       .from(this.questionsTable)
@@ -307,7 +307,7 @@ class AssessmentModel {
    * Get all questions for an assessment
    */
   async getQuestions(assessmentId: string): Promise<Array<Question & { options?: QuestionOption[] }>> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // Get all questions
     const { data: questions, error: questionsError } = await supabase
@@ -342,7 +342,7 @@ class AssessmentModel {
    * Link topics to assessment
    */
   async linkTopics(assessmentId: string, topicIds: string[]): Promise<void> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const records = topicIds.map(topicId => ({
       assessment_id: assessmentId,
@@ -360,7 +360,7 @@ class AssessmentModel {
    * Get topics for an assessment
    */
   async getTopics(assessmentId: string): Promise<string[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.topicsJunctionTable)
@@ -375,7 +375,7 @@ class AssessmentModel {
    * Create a new student attempt
    */
   async createStudentAttempt(assessmentId: string, studentId: string): Promise<StudentAttempt> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // First, get the enrollment_id for this student and course
     const assessment = await this.findById(assessmentId);
@@ -422,7 +422,7 @@ class AssessmentModel {
       timeTakenSeconds?: number;
     }>
   ): Promise<StudentAnswer[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     // Calculate correctness and points for each answer
     const answersWithResults = await Promise.all(
@@ -500,7 +500,7 @@ class AssessmentModel {
       timeTakenSeconds?: number;
     }>
   ): Promise<StudentAttempt> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Submit answers
     const submittedAnswers = await this.submitStudentAnswers(attemptId, answers);
@@ -562,7 +562,7 @@ class AssessmentModel {
     answers: StudentAnswer[];
     questions: Question[];
   }> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Get attempt
     const { data: attempt, error: attemptError } = await supabase
@@ -597,7 +597,7 @@ class AssessmentModel {
    * Get student attempts for an assessment
    */
   async getStudentAttempts(assessmentId: string, studentId: string): Promise<StudentAttempt[]> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
     
     const { data, error } = await supabase
       .from(this.attemptsTable)
@@ -619,7 +619,7 @@ class AssessmentModel {
     previousQuestionId?: string,
     wasCorrect?: boolean
   ): Promise<Question & { options?: QuestionOption[] } | null> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Get attempt details and answered questions in parallel
     const attemptPromise = supabase
@@ -752,7 +752,7 @@ class AssessmentModel {
     isComplete: boolean;
     isPendingEvaluation?: boolean; // For subjective questions evaluated in background
   }> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Get question details and correct options in parallel for MCQ/MSQ
     const questionPromise = supabase
@@ -904,7 +904,7 @@ class AssessmentModel {
       const pointsEarned = isCorrect ? points : 0;
 
       // Update the answer record with evaluation results
-      const supabase = getSupabaseClient();
+      const supabase = requireSupabaseClient();
       const { error } = await supabase
         .from(this.answersTable)
         .update({
@@ -986,7 +986,7 @@ class AssessmentModel {
     questionId: string,
     courseId: string
   ): Promise<QuestionBank> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     // Get the question with its assessment_id first
     const { data: questionData } = await supabase
@@ -1058,7 +1058,7 @@ class AssessmentModel {
       subtopic_id?: string;
     } = {}
   ): Promise<Array<QuestionBank & { options?: QuestionBankOption[] }>> {
-    const supabase = getSupabaseClient();
+    const supabase = requireSupabaseClient();
 
     let query = supabase
       .from(this.questionBankTable)
