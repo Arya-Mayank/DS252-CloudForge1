@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { body, validationResult, CustomValidator } from 'express-validator';
 import { AuthRequest } from '../middleware/auth.middleware';
 import assessmentModel from '../models/assessment.model';
 import topicModel, { Topic, Subtopic } from '../models/topic.model';
@@ -6,23 +7,76 @@ import azureOpenAIService from '../services/azure-openai.service';
 import courseModel from '../models/course.model';
 
 /**
+ * Custom validator to ensure difficulty distribution sums to 100%
+ */
+const validateDifficultyDistribution: CustomValidator = (value) => {
+  if (!value) {
+    // If not provided, that's okay (optional field)
+    return true;
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Difficulty distribution must be an object');
+  }
+
+  const { easy, medium, hard } = value;
+  
+  // Check if all properties exist
+  if (easy === undefined || medium === undefined || hard === undefined) {
+    throw new Error('Difficulty distribution must include easy, medium, and hard properties');
+  }
+  
+  // Check if all values are numbers
+  if (typeof easy !== 'number' || typeof medium !== 'number' || typeof hard !== 'number') {
+    throw new Error('Difficulty distribution values must be numbers');
+  }
+
+  // Check if values are non-negative
+  if (easy < 0 || medium < 0 || hard < 0) {
+    throw new Error('Difficulty distribution values cannot be negative');
+  }
+
+  // Check if sum equals 100
+  const sum = easy + medium + hard;
+  if (Math.abs(sum - 100) > 0.01) { // Allow small floating point errors
+    throw new Error(`Difficulty distribution must sum to exactly 100%. Current sum: ${sum}%`);
+  }
+
+  return true;
+};
+
+/**
+ * Validation middleware for creating assessments
+ */
+export const validateCreateAssessment = [
+  body('courseId').notEmpty().withMessage('Course ID is required'),
+  body('title').trim().notEmpty().withMessage('Title is required'),
+  body('subtopics').isArray({ min: 1 }).withMessage('At least one subtopic is required'),
+  body('difficultyDistribution').optional().custom(validateDifficultyDistribution),
+];
+
+/**
  * Create a new assessment with AI-generated questions
  * POST /api/assessments
  */
 export const createAssessment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    // Check validation results
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ 
+        error: 'Validation failed',
+        errors: errors.array() 
+      });
+      return;
+    }
+
     if (!req.user) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
 
-    const { courseId, title, description, subtopics, timeLimit, passingScore, difficultyDistribution, quizLevel } = req.body;
-
-    // Validate required fields
-    if (!courseId || !title || !subtopics || !Array.isArray(subtopics) || subtopics.length === 0) {
-      res.status(400).json({ error: 'Missing required fields: courseId, title, subtopics' });
-      return;
-    }
+    const { courseId, title, description, subtopics, timeLimit, passingScore, difficultyDistribution } = req.body;
 
     // Verify course exists and user is the instructor
     const course = await courseModel.findById(courseId);
@@ -90,8 +144,7 @@ export const createAssessment = async (req: AuthRequest, res: Response): Promise
     const { questions } = await azureOpenAIService.generateQuestionsForAssessment({
       subtopics: enrichedSubtopics,
       courseContext: course.description || undefined,
-      difficultyDistribution: difficultyDistribution || undefined,
-      quizLevel: quizLevel || 'UG'
+      difficultyDistribution: difficultyDistribution || undefined
     });
 
     console.log(`✅ Generated ${questions.length} questions`);

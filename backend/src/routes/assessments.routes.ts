@@ -13,6 +13,7 @@ router.post(
   '/',
   authenticateToken,
   requireInstructor,
+  assessmentsController.validateCreateAssessment,
   assessmentsController.createAssessment
 );
 

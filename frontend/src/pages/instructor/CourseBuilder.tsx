@@ -346,7 +346,6 @@ export const CourseBuilder = () => {
       subjectiveCount: number;
     }>;
     difficultyDistribution?: { easy: number; medium: number; hard: number };
-    quizLevel?: 'UG' | 'PG';
   }) => {
     if (!id) return;
 
@@ -373,7 +372,6 @@ export const CourseBuilder = () => {
         title: data.title,
         subtopics: data.subtopics,
         difficultyDistribution: data.difficultyDistribution,
-        quizLevel: data.quizLevel || 'UG'
       });
       
       console.log(`✅ Assessment created: ${result.assessment.id}`);

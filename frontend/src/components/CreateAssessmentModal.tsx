@@ -9,6 +9,11 @@ interface SubtopicSelection {
   subjectiveCount: number;
 }
 
+// Helper to extract subtopic string from either string or object format
+const getSubtopicString = (subtopic: string | { subtopic: string; bloom_level?: string }): string => {
+  return typeof subtopic === 'string' ? subtopic : subtopic.subtopic;
+};
+
 interface CreateAssessmentModalProps {
   course: Course;
   isOpen: boolean;
@@ -17,7 +22,6 @@ interface CreateAssessmentModalProps {
     title: string;
     subtopics: SubtopicSelection[];
     difficultyDistribution?: { easy: number; medium: number; hard: number };
-    quizLevel?: 'UG' | 'PG';
   }) => void;
 }
 
@@ -32,7 +36,6 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
     medium: 50,
     hard: 20
   });
-  const [quizLevel, setQuizLevel] = useState<'UG' | 'PG'>('UG');
 
   if (!isOpen) return null;
 
@@ -140,7 +143,6 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
       title: assessmentTitle,
       subtopics: subtopicsData,
       difficultyDistribution,
-      quizLevel,
     });
 
     // Reset
@@ -150,7 +152,6 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
     setQuestionCounts(new Map());
     setExpandedTopics(new Set());
     setDifficultyDistribution({ easy: 30, medium: 50, hard: 20 });
-    setQuizLevel('UG');
   };
 
   const selectedCount = Array.from(selectedSubtopics.values()).filter(v => v).length;
@@ -235,56 +236,6 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
                 />
               </div>
 
-              {/* Quiz Level Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quiz Level <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setQuizLevel('UG')}
-                    className={`px-4 py-3 rounded-lg border-2 transition-all ${
-                      quizLevel === 'UG'
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center space-x-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                      <div className="text-left">
-                        <div className="font-semibold">Undergraduate (UG)</div>
-                        <div className="text-xs opacity-75">Basic to intermediate level</div>
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuizLevel('PG')}
-                    className={`px-4 py-3 rounded-lg border-2 transition-all ${
-                      quizLevel === 'PG'
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center space-x-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                      <div className="text-left">
-                        <div className="font-semibold">Postgraduate (PG)</div>
-                        <div className="text-xs opacity-75">Advanced level</div>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  Select the academic level. This will determine the complexity and depth of questions generated.
-                </p>
-              </div>
-
               {/* Topic Selection */}
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -299,7 +250,10 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
                 <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
                   {syllabus.map((topic: any, topicIndex: number) => {
                     const isExpanded = expandedTopics.has(topic.topic);
-                    const subtopicKeys = topic.subtopics.map((st: string) => `${topic.topic}|||${st}`);
+                    const subtopicKeys = topic.subtopics.map((st: string | { subtopic: string; bloom_level?: string }) => {
+                      const subtopicStr = getSubtopicString(st);
+                      return `${topic.topic}|||${subtopicStr}`;
+                    });
                     const selectedInTopic = subtopicKeys.filter((key: string) => selectedSubtopics.get(key)).length;
 
                     return (
@@ -336,8 +290,9 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
                         {isExpanded && (
                           <div className="px-4 pb-4 bg-gray-50">
                             <div className="space-y-2 ml-8">
-                              {topic.subtopics.map((subtopic: string, subIndex: number) => {
-                                const key = `${topic.topic}|||${subtopic}`;
+                              {topic.subtopics.map((subtopicItem: string | { subtopic: string; bloom_level?: string }, subIndex: number) => {
+                                const subtopicStr = getSubtopicString(subtopicItem);
+                                const key = `${topic.topic}|||${subtopicStr}`;
                                 const isSelected = selectedSubtopics.get(key) || false;
 
                                 return (
@@ -348,10 +303,10 @@ export const CreateAssessmentModal = ({ course, isOpen, onClose, onSubmit }: Cre
                                     <input
                                       type="checkbox"
                                       checked={isSelected}
-                                      onChange={() => handleSubtopicToggle(topic.topic, subtopic)}
+                                      onChange={() => handleSubtopicToggle(topic.topic, subtopicStr)}
                                       className="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                                     />
-                                    <span className="flex-1 text-gray-700">{subtopic}</span>
+                                    <span className="flex-1 text-gray-700">{subtopicStr}</span>
                                   </label>
                                 );
                               })}
