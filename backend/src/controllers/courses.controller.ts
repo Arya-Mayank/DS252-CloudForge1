@@ -88,10 +88,14 @@ export const getCourses = async (req: AuthRequest, res: Response): Promise<void>
 
 /**
  * Get all courses (for enrollment browsing)
+ * Only returns published courses for students
  */
-export const getAllCourses = async (_req: AuthRequest, res: Response): Promise<void> => {
+export const getAllCourses = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const courses = await courseModel.findAll();
+    // Only show published courses for browsing
+    // Instructors can see their own unpublished courses, but students should only see published ones
+    const publishedOnly = req.user?.role === 'student';
+    const courses = await courseModel.findAll(undefined, publishedOnly);
     res.json({ courses });
   } catch (error) {
     console.error('Get all courses error:', error);
@@ -365,6 +369,12 @@ export const enrollInCourse = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // Verify course is published
+    if (!course.is_published) {
+      res.status(400).json({ error: 'Course is not published yet. Please wait for the instructor to publish it.' });
+      return;
+    }
+
     // Check if already enrolled
     const isEnrolled = await courseModel.isEnrolled(req.user.id, id);
     if (isEnrolled) {
@@ -378,7 +388,20 @@ export const enrollInCourse = async (req: AuthRequest, res: Response): Promise<v
     res.json({ message: 'Successfully enrolled in course' });
   } catch (error) {
     console.error('Enroll in course error:', error);
-    res.status(500).json({ error: 'Failed to enroll in course' });
+    
+    // Provide more specific error messages
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Check for common database errors
+    if (errorMessage.includes('duplicate') || errorMessage.includes('unique constraint')) {
+      res.status(400).json({ error: 'Already enrolled in this course' });
+      return;
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to enroll in course',
+      details: errorMessage 
+    });
   }
 };
 
@@ -399,12 +422,33 @@ export const unenrollFromCourse = async (req: AuthRequest, res: Response): Promi
 
     const { id } = req.params;
 
+    // Verify course exists
+    const course = await courseModel.findById(id);
+    if (!course) {
+      res.status(404).json({ error: 'Course not found' });
+      return;
+    }
+
+    // Check if enrolled
+    const isEnrolled = await courseModel.isEnrolled(req.user.id, id);
+    if (!isEnrolled) {
+      res.status(400).json({ error: 'Not enrolled in this course' });
+      return;
+    }
+
     await courseModel.unenrollStudent(req.user.id, id);
 
     res.json({ message: 'Successfully unenrolled from course' });
   } catch (error) {
     console.error('Unenroll from course error:', error);
-    res.status(500).json({ error: 'Failed to unenroll from course' });
+    
+    // Provide more specific error messages
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    res.status(500).json({ 
+      error: 'Failed to unenroll from course',
+      details: errorMessage 
+    });
   }
 };
 

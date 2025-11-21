@@ -65,14 +65,20 @@ class CourseModel {
 
   /**
    * Get all courses (optionally filtered by instructor)
+   * @param instructorId - If provided, only return courses for this instructor
+   * @param publishedOnly - If true, only return published courses (default: false for instructor, true for students)
    */
-  async findAll(instructorId?: string): Promise<Course[]> {
+  async findAll(instructorId?: string, publishedOnly: boolean = false): Promise<Course[]> {
     const supabase = requireSupabaseClient();
     
     let query = supabase.from(this.table).select('*');
     
     if (instructorId) {
       query = query.eq('instructor_id', instructorId);
+    }
+    
+    if (publishedOnly) {
+      query = query.eq('is_published', true);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -175,20 +181,23 @@ class CourseModel {
   /**
    * Enroll a student in a course
    */
-  async enrollStudent(studentId: string, courseId: string): Promise<boolean> {
+  async enrollStudent(studentId: string, courseId: string): Promise<void> {
     const supabase = requireSupabaseClient();
     
     const { error } = await supabase
       .from('enrollments')
       .insert([{ student_id: studentId, course_id: courseId }]);
 
-    return !error;
+    if (error) {
+      console.error('Failed to enroll student:', error);
+      throw new Error(`Failed to enroll student: ${error.message}`);
+    }
   }
 
   /**
    * Unenroll a student from a course
    */
-  async unenrollStudent(studentId: string, courseId: string): Promise<boolean> {
+  async unenrollStudent(studentId: string, courseId: string): Promise<void> {
     const supabase = requireSupabaseClient();
     
     const { error } = await supabase
@@ -197,7 +206,10 @@ class CourseModel {
       .eq('student_id', studentId)
       .eq('course_id', courseId);
 
-    return !error;
+    if (error) {
+      console.error('Failed to unenroll student:', error);
+      throw new Error(`Failed to unenroll student: ${error.message}`);
+    }
   }
 
   /**

@@ -50,10 +50,14 @@ export const StudentDashboard = () => {
   const handleEnroll = async (courseId: string) => {
     try {
       await coursesAPI.enroll(courseId);
-      loadData();
-    } catch (error) {
+      // Reload data to update course lists
+      await loadData();
+    } catch (error: any) {
       console.error('Failed to enroll:', error);
-      alert('Failed to enroll in course');
+      
+      // Show more specific error message from backend
+      const errorMessage = error?.response?.data?.error || error?.response?.data?.details || 'Failed to enroll in course';
+      alert(errorMessage);
     }
   };
 
