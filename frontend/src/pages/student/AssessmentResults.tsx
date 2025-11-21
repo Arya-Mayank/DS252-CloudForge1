@@ -4,6 +4,8 @@ import { Layout } from '../../components/Layout';
 import { Assessment, Question } from '../../api/assessments';
 import { studentAssessmentsAPI } from '../../api/student-assessments';
 import { aiFeedbackAPI } from '../../api/ai-feedback';
+import { coursesAPI } from '../../api/courses';
+import { SyllabusItem } from '../../types';
 
 interface AssessmentResult {
   question: Question;
@@ -33,6 +35,10 @@ export const AssessmentResults = () => {
   const [generatingQuestions, setGeneratingQuestions] = useState<{ [questionId: string]: boolean }>({});
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [backendResults, setBackendResults] = useState<any>(null);
+  const [topicMap, setTopicMap] = useState<Map<string, string>>(new Map());
+  const [subtopicMap, setSubtopicMap] = useState<Map<string, { title: string; topicTitle: string }>>(new Map());
+  const [subtopicRecommendations, setSubtopicRecommendations] = useState<string[]>([]);
+  const [courseSyllabus, setCourseSyllabus] = useState<SyllabusItem[] | undefined>();
 
   const calculateResults = useCallback(async () => {
     setLoading(true);
@@ -106,6 +112,75 @@ export const AssessmentResults = () => {
     }
   }, []);
 
+  // Helper to build topic/subtopic maps from course syllabus
+  const buildTopicSubtopicMaps = useCallback(async (courseId: string) => {
+    try {
+      const course = await coursesAPI.getById(courseId);
+      const syllabus = course.syllabus || [];
+      
+      const topicIdMap = new Map<string, string>();
+      const subtopicIdMap = new Map<string, { title: string; topicTitle: string }>();
+      
+      // Build maps from syllabus
+      syllabus.forEach((item: SyllabusItem) => {
+        const topicTitle = item.topic;
+        
+        item.subtopics.forEach((subtopicItem) => {
+          const subtopicTitle = typeof subtopicItem === 'string' ? subtopicItem : subtopicItem.subtopic;
+          
+          // For now, we'll use topic/subtopic titles as keys since we don't have IDs in syllabus
+          // This will be improved when backend returns topic_id/subtopic_id with names
+          // We'll match questions by topic/subtopic titles or use a fallback approach
+        });
+      });
+      
+      // For questions with topic_id/subtopic_id, we'd need to fetch from backend
+      // For now, we'll use a different approach - fetch topics from course
+      setTopicMap(topicIdMap);
+      setSubtopicMap(subtopicIdMap);
+    } catch (error) {
+      console.error('Failed to build topic/subtopic maps:', error);
+    }
+  }, []);
+
+  // Helper to get topic and subtopic names from question
+  const getTopicSubtopicFromQuestion = useCallback((question: Question, courseSyllabus?: SyllabusItem[]): { topicTitle: string; subtopic: string } => {
+    // First try to use topic_id/subtopic_id if available
+    // For now, we'll extract from question data or use assessment context
+    
+    // Fallback: Try to extract from question text or use course syllabus
+    if (courseSyllabus && courseSyllabus.length > 0) {
+      // Find the topic that likely matches this question
+      // This is a best-effort approach until backend provides topic/subtopic names
+      for (const syllabusItem of courseSyllabus) {
+        for (const subtopicItem of syllabusItem.subtopics) {
+          const subtopicTitle = typeof subtopicItem === 'string' ? subtopicItem : subtopicItem.subtopic;
+          if (question.question_text.toLowerCase().includes(subtopicTitle.toLowerCase()) ||
+              subtopicTitle.toLowerCase().includes(question.question_text.toLowerCase().substring(0, 20))) {
+            return {
+              topicTitle: syllabusItem.topic,
+              subtopic: subtopicTitle
+            };
+          }
+        }
+      }
+      
+      // If no match found, return first topic/subtopic from syllabus
+      const firstItem = courseSyllabus[0];
+      const firstSubtopic = firstItem.subtopics[0];
+      return {
+        topicTitle: firstItem.topic,
+        subtopic: typeof firstSubtopic === 'string' ? firstSubtopic : firstSubtopic.subtopic
+      };
+    }
+    
+    // Final fallback: return generic values
+    return {
+      topicTitle: 'General Topic',
+      subtopic: 'General Concepts'
+    };
+  }, []);
+
   const loadResultsFromBackend = useCallback(async () => {
     if (!assessmentId || !attemptId) {
       console.error('Missing assessmentId or attemptId:', { assessmentId, attemptId });
@@ -122,6 +197,18 @@ export const AssessmentResults = () => {
       setAssessment(results.assessment);
       setQuestions(results.questions);
       setStartTime(new Date(results.attempt.started_at));
+      
+      // Load course syllabus to get topic/subtopic mappings
+      if (results.assessment.course_id) {
+        try {
+          const course = await coursesAPI.getById(results.assessment.course_id);
+          setCourseSyllabus(course.syllabus);
+          await buildTopicSubtopicMaps(results.assessment.course_id);
+        } catch (error) {
+          console.error('Failed to fetch course syllabus:', error);
+        }
+      }
+      
       calculateResultsFromBackend(results);
     } catch (error) {
       console.error('Failed to load results from backend:', error);
@@ -130,7 +217,7 @@ export const AssessmentResults = () => {
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, attemptId, navigate, calculateResultsFromBackend]);
+  }, [assessmentId, attemptId, navigate, calculateResultsFromBackend, buildTopicSubtopicMaps]);
 
   useEffect(() => {
     console.log('AssessmentResults useEffect triggered:', {
@@ -158,6 +245,16 @@ export const AssessmentResults = () => {
       setQuestions(stateQuestions);
       setAssessment(stateAssessment);
       setStartTime(stateStartTime);
+      
+      // Load course syllabus if available
+      if (stateAssessment?.course_id) {
+        coursesAPI.getById(stateAssessment.course_id).then(course => {
+          setCourseSyllabus(course.syllabus);
+        }).catch(error => {
+          console.error('Failed to fetch course syllabus:', error);
+        });
+      }
+      
       calculateResults();
     } else if (assessmentId && attemptId) {
       // Load from backend using attempt ID
@@ -177,9 +274,10 @@ export const AssessmentResults = () => {
       const result = results.find(r => r.question.id === questionId);
       if (!result) return;
 
-      // Extract topic and subtopic from question (this would ideally come from the database)
-      const topicTitle = 'Infrastructure as Code'; // TODO: Get from question data
-      const subtopic = result.question.question_text.includes('Terraform') ? 'Terraform Configuration' : 'General Concepts';
+      // Get topic and subtopic from question using course syllabus
+      const topicSubtopic = getTopicSubtopicFromQuestion(result.question, courseSyllabus);
+      const topicTitle = topicSubtopic.topicTitle;
+      const subtopic = topicSubtopic.subtopic;
 
       let additionalQuestion;
       
@@ -248,25 +346,55 @@ export const AssessmentResults = () => {
     return { correctCount, totalCount, percentage, totalPoints, maxPoints };
   };
 
-  const getSubtopicRecommendations = () => {
-    const incorrectQuestions = results.filter(r => !r.isCorrect);
-    const subtopics = new Set<string>();
+  // Load subtopic recommendations when results are available
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      if (!results.length || !assessment?.course_id) return;
+      
+      const incorrectQuestions = results.filter(r => !r.isCorrect);
+      if (incorrectQuestions.length === 0) {
+        setSubtopicRecommendations([]);
+        return;
+      }
+      
+      const subtopics = new Set<string>();
+      
+      // Use cached course syllabus if available, otherwise fetch
+      let syllabus = courseSyllabus;
+      if (!syllabus && assessment?.course_id) {
+        try {
+          const course = await coursesAPI.getById(assessment.course_id);
+          syllabus = course.syllabus;
+          setCourseSyllabus(syllabus);
+        } catch (error) {
+          console.error('Failed to fetch course for recommendations:', error);
+        }
+      }
+      
+      if (syllabus) {
+        incorrectQuestions.forEach(result => {
+          // Get actual subtopic from question using course syllabus
+          const topicSubtopic = getTopicSubtopicFromQuestion(result.question, syllabus);
+          if (topicSubtopic.subtopic && topicSubtopic.subtopic !== 'General Concepts') {
+            subtopics.add(topicSubtopic.subtopic);
+          }
+          
+          // Also add topic if different from default
+          if (topicSubtopic.topicTitle && topicSubtopic.topicTitle !== 'General Topic') {
+            subtopics.add(topicSubtopic.topicTitle);
+          }
+        });
+      }
+      
+      setSubtopicRecommendations(Array.from(subtopics));
+    };
     
-    incorrectQuestions.forEach(result => {
-      // TODO: Get actual subtopic from question data
-      if (result.question.question_text.includes('Terraform')) {
-        subtopics.add('Terraform Configuration');
-      }
-      if (result.question.question_text.includes('backend')) {
-        subtopics.add('Terraform Backends');
-      }
-      if (result.question.question_text.includes('state')) {
-        subtopics.add('State Management');
-      }
-    });
+    loadRecommendations();
+  }, [results, assessment?.course_id, courseSyllabus, getTopicSubtopicFromQuestion]);
+    };
     
-    return Array.from(subtopics);
-  };
+    loadRecommendations();
+  }, [results, assessment?.course_id, getTopicSubtopicFromQuestion]);
 
   const formatDuration = (startTime: Date, endTime?: Date) => {
     if (backendResults && backendResults.results.timeTakenMinutes) {
@@ -313,7 +441,6 @@ export const AssessmentResults = () => {
   }
 
   const score = getScore();
-  const subtopicRecommendations = getSubtopicRecommendations();
 
   return (
     <Layout>
