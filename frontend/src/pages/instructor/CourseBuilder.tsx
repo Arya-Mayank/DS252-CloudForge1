@@ -445,6 +445,20 @@ export const CourseBuilder = () => {
     }
   };
 
+  const handleQuickActionAnalytics = useCallback(() => {
+    if (!id) return;
+    navigate(`/instructor/analytics/${id}`);
+  }, [id, navigate]);
+
+  const handleQuickActionCreateAssessment = useCallback(() => {
+    setActiveTab('assessments');
+    setIsCreateAssessmentModalOpen(true);
+  }, []);
+
+  const handleQuickActionManageStudents = useCallback(() => {
+    window.alert('Student roster management is coming soon. For now, manage enrollments directly via Supabase or contact support.');
+  }, []);
+
   if (loading) {
     return (
       <Layout>
@@ -1616,13 +1630,22 @@ export const CourseBuilder = () => {
             </h3>
             
             <div className="space-y-2">
-              <button className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={handleQuickActionAnalytics}
+                className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 📊 View Analytics
               </button>
-              <button className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={handleQuickActionCreateAssessment}
+                className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 📝 Create Assignment
               </button>
-              <button className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={handleQuickActionManageStudents}
+                className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 👥 Manage Students
               </button>
             </div>
