@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
-import { coursesAPI } from '../../api/courses';
+import { coursesAPI, CourseFileSummary } from '../../api/courses';
 import { aiAPI } from '../../api/ai';
 import { assessmentsAPI, Assessment } from '../../api/assessments';
 import { Course } from '../../types';
@@ -15,7 +15,7 @@ export const CourseBuilder = () => {
   const [course, setCourse] = useState<Course | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('upload');
   const [loading, setLoading] = useState(true);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<CourseFileSummary[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -33,6 +33,7 @@ export const CourseBuilder = () => {
   const [isQuestionViewerOpen, setIsQuestionViewerOpen] = useState(false);
   const [publishingAssessment, setPublishingAssessment] = useState<string | null>(null);
   const [hasNewMaterial, setHasNewMaterial] = useState(false); // Track if new material uploaded after syllabus
+  const inlineMaterialInputRef = useRef<HTMLInputElement | null>(null);
 
   // AI Analysis Progress
   const [analysisProgress, setAnalysisProgress] = useState({
@@ -41,14 +42,22 @@ export const CourseBuilder = () => {
     syllabusGeneration: false,
   });
 
+  const loadFiles = useCallback(async () => {
+    if (!id) return;
+    try {
+      const files = await coursesAPI.getFiles(id);
+      setUploadedFiles(files);
+    } catch (error) {
+      console.error('Failed to load course files:', error);
+    }
+  }, [id]);
+
   const loadCourse = useCallback(async () => {
     if (!id) return;
     try {
       const data = await coursesAPI.getById(id);
       setCourse(data);
-      if (data.file_name) {
-        setUploadedFiles([{ name: data.file_name, url: data.file_url }]);
-      }
+      await loadFiles();
       // Reset new material flag when course is loaded
       setHasNewMaterial(false);
       
@@ -65,7 +74,7 @@ export const CourseBuilder = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, loadFiles]);
 
   useEffect(() => {
     loadCourse();
@@ -94,6 +103,7 @@ export const CourseBuilder = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       await handleFileUpload(e.target.files[0]);
+      e.target.value = '';
     }
   };
 
@@ -102,12 +112,12 @@ export const CourseBuilder = () => {
     
     setUploading(true);
     try {
-      const updatedCourse = await coursesAPI.uploadMaterial(id, file);
+      const { course: updatedCourse, files } = await coursesAPI.uploadMaterial(id, file);
       setCourse(updatedCourse);
-      setUploadedFiles([...uploadedFiles, { name: file.name, url: updatedCourse.file_url }]);
+      setUploadedFiles(files);
       
       // If course is published and has syllabus, mark that new material was added
-      if (course.is_published && course.syllabus && Array.isArray(course.syllabus) && course.syllabus.length > 0) {
+      if (updatedCourse.is_published && updatedCourse.syllabus && Array.isArray(updatedCourse.syllabus) && updatedCourse.syllabus.length > 0) {
         setHasNewMaterial(true);
       }
       
@@ -122,16 +132,20 @@ export const CourseBuilder = () => {
     }
   };
 
-  const handleDeleteFile = async (fileName: string) => {
+  const handleInlineUploadClick = () => {
+    inlineMaterialInputRef.current?.click();
+  };
+
+  const handleDeleteFile = async (fileId: string, fileName: string) => {
     if (!id) return;
     
     const confirmed = window.confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`);
     if (!confirmed) return;
 
-    setDeletingFile(fileName);
+    setDeletingFile(fileId);
     try {
-      await coursesAPI.deleteFile(id, fileName);
-      setUploadedFiles(prev => prev.filter(f => f.name !== fileName));
+      const files = await coursesAPI.deleteFile(id, fileId);
+      setUploadedFiles(files);
       await loadCourse();
       
       // Reset analysis progress since material was removed
@@ -149,7 +163,7 @@ export const CourseBuilder = () => {
   };
 
   const handleGenerateSyllabus = async (updateExisting: boolean = false) => {
-    if (!id || !course?.file_name) return;
+    if (!id || !course || uploadedFiles.length === 0) return;
 
     setGenerating(true);
     setGenerationStatus(updateExisting 
@@ -334,6 +348,15 @@ export const CourseBuilder = () => {
     { value: 'ANALYZE', label: 'Analyze' },
     { value: 'EVALUATE', label: 'Evaluate' },
     { value: 'CREATE', label: 'Create' },
+  ];
+
+  const bloomLegend = [
+    { value: 'REMEMBER', label: 'Remember', description: 'Recall facts' },
+    { value: 'UNDERSTAND', label: 'Understand', description: 'Explain ideas' },
+    { value: 'APPLY', label: 'Apply', description: 'Use in practice' },
+    { value: 'ANALYZE', label: 'Analyze', description: 'Break concepts down' },
+    { value: 'EVALUATE', label: 'Evaluate', description: 'Make judgments' },
+    { value: 'CREATE', label: 'Create', description: 'Build something new' }
   ];
 
   const handleCreateAssessment = async (data: {
@@ -557,8 +580,27 @@ export const CourseBuilder = () => {
                     }
                   </p>
                 </div>
-                <div className="flex items-center space-x-3 ml-6">
-                  {hasNewMaterial && course?.is_published && course?.file_name && (
+                <div className="flex flex-wrap items-center gap-3 ml-0 md:ml-6">
+                  <button
+                    type="button"
+                    onClick={handleInlineUploadClick}
+                    disabled={uploading}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.586-6.586a4 4 0 10-5.657-5.657L5 12" />
+                    </svg>
+                    <span>Add More Files</span>
+                  </button>
+                  <input
+                    ref={inlineMaterialInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                  {hasNewMaterial && course?.is_published && uploadedFiles.length > 0 && (
                     <button
                       onClick={() => handleGenerateSyllabus(true)}
                       disabled={generating || isEditMode}
@@ -758,8 +800,8 @@ export const CourseBuilder = () => {
                       <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
                     </div>
                     <div className="divide-y divide-gray-200">
-                      {uploadedFiles.map((file, index) => (
-                        <div key={index} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                      {uploadedFiles.map((file) => (
+                        <div key={file.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4 flex-1">
                               <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -795,12 +837,12 @@ export const CourseBuilder = () => {
                             </div>
                             
                             <button
-                              onClick={() => handleDeleteFile(file.name)}
-                              disabled={deletingFile === file.name}
+                              onClick={() => handleDeleteFile(file.id, file.name)}
+                              disabled={deletingFile === file.id}
                               className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                               title="Delete file"
                             >
-                              {deletingFile === file.name ? (
+                              {deletingFile === file.id ? (
                                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
                               ) : (
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -917,56 +959,24 @@ export const CourseBuilder = () => {
                   <>
                     {/* Bloom's Taxonomy Legend */}
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center">
-                            <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Bloom's Taxonomy Levels
-                          </h3>
-                          <p className="text-xs text-gray-600 mb-3">
-                            These badges indicate the cognitive skill level expected for each topic. They help students understand what they need to achieve.
-                          </p>
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('REMEMBER')}`}>
-                                Remember
-                              </span>
-                              <span className="text-xs text-gray-600">Recall facts</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('UNDERSTAND')}`}>
-                                Understand
-                              </span>
-                              <span className="text-xs text-gray-600">Explain ideas</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('APPLY')}`}>
-                                Apply
-                              </span>
-                              <span className="text-xs text-gray-600">Use in practice</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('ANALYZE')}`}>
-                                Analyze
-                              </span>
-                              <span className="text-xs text-gray-600">Break down</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('EVALUATE')}`}>
-                                Evaluate
-                              </span>
-                              <span className="text-xs text-gray-600">Make judgments</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getBloomLevelColor('CREATE')}`}>
-                                Create
-                              </span>
-                              <span className="text-xs text-gray-600">Build new</span>
-                            </div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Bloom's Taxonomy Levels
+                      </h3>
+                      <p className="text-xs text-gray-600 mb-3">
+                        These badges indicate the cognitive skill level expected for each topic. They help students understand what they need to achieve.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {bloomLegend.map((level) => (
+                          <div key={level.value} className="flex flex-col sm:flex-row sm:items-center gap-1 min-w-[160px]">
+                            <span className={`inline-flex items-center justify-center px-3 py-1 rounded-lg text-xs font-semibold border ${getBloomLevelColor(level.value)}`}>
+                              {level.label}
+                            </span>
+                            <span className="text-xs text-gray-600">{level.description}</span>
                           </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
 

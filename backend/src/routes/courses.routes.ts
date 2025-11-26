@@ -104,7 +104,7 @@ router.get(
  * @access  Private
  */
 router.get(
-  '/:id/files/:fileName/info',
+  '/:id/files/:fileId/info',
   authenticateToken,
   filesController.getFileInfo
 );
@@ -115,7 +115,7 @@ router.get(
  * @access  Private (Instructor only)
  */
 router.delete(
-  '/:id/files/:fileName',
+  '/:id/files/:fileId',
   authenticateToken,
   requireInstructor,
   filesController.deleteCourseFile

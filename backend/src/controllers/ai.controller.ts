@@ -37,32 +37,54 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
 
     let textToAnalyze = documentText;
 
-    // If no text provided, try to parse the uploaded file
-    if (!textToAnalyze && course.file_url) {
-      console.log('📄 Extracting text from uploaded file...');
-      try {
-        // Get local file path (for mock mode) or download from Azure
-        const filePath = course.file_url.startsWith('http://localhost') 
-          ? course.file_url.replace('http://localhost:5000/', '')
-          : course.file_url;
-        
-        // Determine mime type from filename
-        const fileName = course.file_name || '';
-        let mimeType = 'application/pdf';
-        if (fileName.endsWith('.docx')) {
-          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        } else if (fileName.endsWith('.doc')) {
-          mimeType = 'application/msword';
+    // If no text provided, try to parse uploaded files (supports multiple files)
+    if (!textToAnalyze) {
+      const courseFiles = await courseModel.getCourseFiles(courseId);
+      const filesToParse = courseFiles.length > 0
+        ? courseFiles
+        : (course.file_url && course.file_name
+            ? [{
+              id: 'legacy',
+              course_id: courseId,
+              file_name: course.file_name,
+              file_url: course.file_url,
+              blob_name: course.file_url,
+              uploaded_at: course.updated_at || new Date().toISOString(),
+              uploaded_by: course.instructor_id
+            }]
+            : []);
+
+      if (filesToParse.length > 0) {
+        console.log(`📄 Extracting text from ${filesToParse.length} uploaded file(s)...`);
+        try {
+          let aggregatedText = '';
+
+          for (const fileMeta of filesToParse) {
+            const filePath = fileMeta.file_url.startsWith('http://localhost')
+              ? fileMeta.file_url.replace('http://localhost:5000/', '')
+              : fileMeta.file_url;
+            
+            const fileName = fileMeta.file_name || '';
+            let mimeType = 'application/pdf';
+            if (fileName.endsWith('.docx')) {
+              mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            } else if (fileName.endsWith('.doc')) {
+              mimeType = 'application/msword';
+            }
+
+            const parsedText = await parseDocument(filePath, mimeType);
+            aggregatedText += `\n\n${parsedText}`;
+          }
+
+          textToAnalyze = aggregatedText.trim();
+          console.log(`✅ Extracted ${textToAnalyze.length} characters from uploaded files`);
+        } catch (error) {
+          console.error('Failed to parse file(s):', error);
+          res.status(400).json({ 
+            error: 'Failed to extract text from uploaded file(s). Please try uploading again.' 
+          });
+          return;
         }
-        
-        textToAnalyze = await parseDocument(filePath, mimeType);
-        console.log(`✅ Extracted ${textToAnalyze.length} characters from file`);
-      } catch (error) {
-        console.error('Failed to parse file:', error);
-        res.status(400).json({ 
-          error: 'Failed to extract text from uploaded file. Please try uploading again.' 
-        });
-        return;
       }
     }
 

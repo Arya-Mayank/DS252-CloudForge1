@@ -155,14 +155,43 @@ export const uploadCourseMaterial = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    const existingFiles = await courseModel.getCourseFiles(id);
+
+    // If there is an existing primary file not yet tracked, store it before overwriting
+    if (
+      course.file_name &&
+      course.file_url &&
+      !existingFiles.some(existing => existing.file_url === course.file_url)
+    ) {
+      const blobName = course.file_url ? course.file_url.split('/').pop() || course.file_name : course.file_name;
+      await courseModel.addCourseFile({
+        course_id: id,
+        file_name: course.file_name,
+        file_url: course.file_url,
+        blob_name: blobName || course.file_name || 'legacy-file',
+        uploaded_by: course.instructor_id
+      });
+    }
+
     // Upload to Azure Blob Storage
     const uploadResult = await azureBlobService.uploadFile(file.path, file.originalname);
 
-    // Update course with file info
+    // Persist file metadata so previous uploads remain accessible
+    await courseModel.addCourseFile({
+      course_id: id,
+      file_name: file.originalname,
+      file_url: uploadResult.url,
+      blob_name: uploadResult.blobName,
+      uploaded_by: req.user.id
+    });
+
+    // Update course with latest file info for backwards compatibility
     const updatedCourse = await courseModel.update(id, {
       file_url: uploadResult.url,
       file_name: file.originalname
     });
+
+    const files = await courseModel.getCourseFiles(id);
 
     // Clean up local file
     try {
@@ -174,10 +203,7 @@ export const uploadCourseMaterial = async (req: AuthRequest, res: Response): Pro
     res.json({
       message: 'Course material uploaded successfully',
       course: updatedCourse,
-      file: {
-        url: uploadResult.url,
-        name: file.originalname
-      }
+      files
     });
   } catch (error) {
     console.error('Upload course material error:', error);

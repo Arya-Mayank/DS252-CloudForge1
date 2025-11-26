@@ -35,8 +35,6 @@ export const AssessmentResults = () => {
   const [generatingQuestions, setGeneratingQuestions] = useState<{ [questionId: string]: boolean }>({});
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [backendResults, setBackendResults] = useState<any>(null);
-  const [topicMap, setTopicMap] = useState<Map<string, string>>(new Map());
-  const [subtopicMap, setSubtopicMap] = useState<Map<string, { title: string; topicTitle: string }>>(new Map());
   const [subtopicRecommendations, setSubtopicRecommendations] = useState<string[]>([]);
   const [courseSyllabus, setCourseSyllabus] = useState<SyllabusItem[] | undefined>();
 
@@ -112,37 +110,6 @@ export const AssessmentResults = () => {
     }
   }, []);
 
-  // Helper to build topic/subtopic maps from course syllabus
-  const buildTopicSubtopicMaps = useCallback(async (courseId: string) => {
-    try {
-      const course = await coursesAPI.getById(courseId);
-      const syllabus = course.syllabus || [];
-      
-      const topicIdMap = new Map<string, string>();
-      const subtopicIdMap = new Map<string, { title: string; topicTitle: string }>();
-      
-      // Build maps from syllabus
-      syllabus.forEach((item: SyllabusItem) => {
-        const topicTitle = item.topic;
-        
-        item.subtopics.forEach((subtopicItem) => {
-          const subtopicTitle = typeof subtopicItem === 'string' ? subtopicItem : subtopicItem.subtopic;
-          
-          // For now, we'll use topic/subtopic titles as keys since we don't have IDs in syllabus
-          // This will be improved when backend returns topic_id/subtopic_id with names
-          // We'll match questions by topic/subtopic titles or use a fallback approach
-        });
-      });
-      
-      // For questions with topic_id/subtopic_id, we'd need to fetch from backend
-      // For now, we'll use a different approach - fetch topics from course
-      setTopicMap(topicIdMap);
-      setSubtopicMap(subtopicIdMap);
-    } catch (error) {
-      console.error('Failed to build topic/subtopic maps:', error);
-    }
-  }, []);
-
   // Helper to get topic and subtopic names from question
   const getTopicSubtopicFromQuestion = useCallback((question: Question, courseSyllabus?: SyllabusItem[]): { topicTitle: string; subtopic: string } => {
     // First try to use topic_id/subtopic_id if available
@@ -203,7 +170,6 @@ export const AssessmentResults = () => {
         try {
           const course = await coursesAPI.getById(results.assessment.course_id);
           setCourseSyllabus(course.syllabus);
-          await buildTopicSubtopicMaps(results.assessment.course_id);
         } catch (error) {
           console.error('Failed to fetch course syllabus:', error);
         }
@@ -217,7 +183,7 @@ export const AssessmentResults = () => {
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, attemptId, navigate, calculateResultsFromBackend, buildTopicSubtopicMaps]);
+  }, [assessmentId, attemptId, navigate, calculateResultsFromBackend]);
 
   useEffect(() => {
     console.log('AssessmentResults useEffect triggered:', {
@@ -391,10 +357,6 @@ export const AssessmentResults = () => {
     
     loadRecommendations();
   }, [results, assessment?.course_id, courseSyllabus, getTopicSubtopicFromQuestion]);
-    };
-    
-    loadRecommendations();
-  }, [results, assessment?.course_id, getTopicSubtopicFromQuestion]);
 
   const formatDuration = (startTime: Date, endTime?: Date) => {
     if (backendResults && backendResults.results.timeTakenMinutes) {

@@ -14,6 +14,16 @@ export interface Course {
   updated_at?: string;
 }
 
+export interface CourseFile {
+  id: string;
+  course_id: string;
+  file_name: string;
+  file_url: string;
+  blob_name: string;
+  uploaded_by?: string | null;
+  uploaded_at: string;
+}
+
 export interface CreateCourseDto {
   instructor_id: string;
   title: string;
@@ -226,6 +236,107 @@ class CourseModel {
       .single();
 
     return !error && !!data;
+  }
+
+  /**
+   * Add a course file record
+   */
+  async addCourseFile(params: {
+    course_id: string;
+    file_name: string;
+    file_url: string;
+    blob_name: string;
+    uploaded_by?: string;
+  }): Promise<CourseFile> {
+    const supabase = requireSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('course_files')
+      .insert([params])
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to add course file: ${error?.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Get files for a course
+   */
+  async getCourseFiles(courseId: string): Promise<CourseFile[]> {
+    const supabase = requireSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('course_files')
+      .select('*')
+      .eq('course_id', courseId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error || !data) {
+      return [];
+    }
+
+    return data;
+  }
+
+  /**
+   * Get file by ID
+   */
+  async getCourseFileById(courseId: string, fileId: string): Promise<CourseFile | null> {
+    const supabase = requireSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('course_files')
+      .select('*')
+      .eq('course_id', courseId)
+      .eq('id', fileId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Delete file record
+   */
+  async deleteCourseFile(fileId: string): Promise<void> {
+    const supabase = requireSupabaseClient();
+
+    const { error } = await supabase
+      .from('course_files')
+      .delete()
+      .eq('id', fileId);
+
+    if (error) {
+      throw new Error(`Failed to delete course file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get latest file for a course
+   */
+  async getLatestCourseFile(courseId: string): Promise<CourseFile | null> {
+    const supabase = requireSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('course_files')
+      .select('*')
+      .eq('course_id', courseId)
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data;
   }
 }
 

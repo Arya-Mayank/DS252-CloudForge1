@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
-import { coursesAPI } from '../../api/courses';
+import { coursesAPI, CourseFileSummary } from '../../api/courses';
 import { aiAPI } from '../../api/ai';
 import { Course, SyllabusItem } from '../../types';
 
@@ -12,12 +12,19 @@ export const CourseDetail = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [files, setFiles] = useState<CourseFileSummary[]>([]);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
     try {
       const data = await coursesAPI.getById(id);
       setCourse(data);
+      try {
+        const courseFiles = await coursesAPI.getFiles(id);
+        setFiles(courseFiles);
+      } catch (error) {
+        console.error('Failed to load course files:', error);
+      }
     } catch (error) {
       console.error('Failed to load course:', error);
     } finally {
@@ -35,8 +42,9 @@ export const CourseDetail = () => {
     setUploading(true);
     try {
       const file = e.target.files[0];
-      await coursesAPI.uploadMaterial(id, file);
-      loadCourse();
+      const { course: updatedCourse, files: updatedFiles } = await coursesAPI.uploadMaterial(id, file);
+      setCourse(updatedCourse);
+      setFiles(updatedFiles);
     } catch (error) {
       console.error('Failed to upload file:', error);
       alert('Failed to upload file');
@@ -46,7 +54,7 @@ export const CourseDetail = () => {
   };
 
   const handleGenerateSyllabus = async () => {
-    if (!id || !course?.file_name) {
+    if (!id || files.length === 0) {
       alert('Please upload a course document first');
       return;
     }
@@ -55,7 +63,9 @@ export const CourseDetail = () => {
     try {
       // For demo: Generate syllabus with placeholder text
       // In production, you'd extract text from the uploaded file
-      const documentText = `This is a sample course about ${course.title}. ${course.description || ''}`;
+      const courseTitle = course?.title || 'your course';
+      const courseDescription = course?.description || '';
+      const documentText = `This is a sample course about ${courseTitle}. ${courseDescription}`;
       const syllabus = await aiAPI.generateSyllabus(id, documentText);
       
       await coursesAPI.update(id, { syllabus });
@@ -133,32 +143,47 @@ export const CourseDetail = () => {
         {/* Upload Section */}
         <div className="card">
           <h2 className="text-xl font-semibold mb-4">Course Materials</h2>
-          {course.file_name ? (
-            <div className="flex items-center space-x-4">
-              <span className="text-green-600">✅ {course.file_name}</span>
-              <a
-                href={course.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-600 hover:text-primary-700"
-              >
-                View File
-              </a>
-            </div>
-          ) : (
-            <div>
-              <label className="btn-primary cursor-pointer inline-block">
-                {uploading ? 'Uploading...' : 'Upload Course Document (PDF/DOCX)'}
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                />
-              </label>
-            </div>
-          )}
+          <div className="space-y-4">
+            <label className="btn-primary cursor-pointer inline-block">
+              {uploading ? 'Uploading...' : 'Upload Course Document (PDF/DOCX)'}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+            </label>
+
+            {files.length > 0 ? (
+              <div className="border border-gray-200 rounded-lg divide-y">
+                {files.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">{file.name}</p>
+                      {file.uploadedAt && (
+                        <p className="text-sm text-gray-500">
+                          Uploaded {new Date(file.uploadedAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    {file.url && (
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-700 text-sm"
+                      >
+                        View
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">No materials uploaded yet.</p>
+            )}
+          </div>
         </div>
 
         {/* AI Features */}
@@ -167,7 +192,7 @@ export const CourseDetail = () => {
           <div className="space-y-3">
             <button
               onClick={handleGenerateSyllabus}
-              disabled={!course.file_name || generating}
+              disabled={files.length === 0 || generating}
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generating ? 'Generating...' : '🤖 Generate Syllabus from Document'}

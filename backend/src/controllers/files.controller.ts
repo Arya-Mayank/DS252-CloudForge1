@@ -4,6 +4,28 @@ import courseModel from '../models/course.model';
 import azureBlobService from '../services/azure-blob.service';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { CourseFile } from '../models/course.model';
+
+const formatCourseFile = (file: CourseFile) => ({
+  id: file.id,
+  name: file.file_name,
+  url: file.file_url,
+  uploadedAt: file.uploaded_at,
+  uploadedBy: file.uploaded_by
+});
+
+const extractBlobName = (fileUrl: string | null, fallback: string): string => {
+  if (!fileUrl) {
+    return fallback;
+  }
+
+  if (fileUrl.includes('blob.core.windows.net') || fileUrl.includes('/uploads/')) {
+    const parts = fileUrl.split('/');
+    return parts[parts.length - 1];
+  }
+
+  return fallback;
+};
 
 /**
  * Delete a course file
@@ -16,7 +38,7 @@ export const deleteCourseFile = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { id, fileName } = req.params;
+    const { id, fileId } = req.params;
 
     // Verify course exists and user is the instructor
     const course = await courseModel.findById(id);
@@ -30,19 +52,31 @@ export const deleteCourseFile = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Check if this is the file to delete
-    if (course.file_name !== fileName) {
+    let courseFile = await courseModel.getCourseFileById(id, fileId);
+    let isLegacyFile = false;
+
+    // Support legacy single-file storage by matching on file name
+    if (!courseFile && course.file_name && course.file_name === fileId) {
+      isLegacyFile = true;
+      const legacyFileName = course.file_name ?? 'legacy-file';
+      const legacyFileUrl = course.file_url || '';
+      courseFile = {
+        id: legacyFileName,
+        course_id: id,
+        file_name: legacyFileName,
+        file_url: legacyFileUrl,
+        blob_name: extractBlobName(legacyFileUrl, legacyFileName),
+        uploaded_by: course.instructor_id,
+        uploaded_at: course.updated_at || new Date().toISOString()
+      };
+    }
+
+    if (!courseFile) {
       res.status(404).json({ error: 'File not found in this course' });
       return;
     }
 
-    // Extract blob name from URL if using Azure
-    let blobName = fileName;
-    if (course.file_url && course.file_url.includes('blob.core.windows.net')) {
-      // Azure Blob Storage URL
-      const urlParts = course.file_url.split('/');
-      blobName = urlParts[urlParts.length - 1];
-    }
+    const blobName = courseFile.blob_name || extractBlobName(courseFile.file_url, courseFile.file_name);
 
     // Try to delete from Azure Blob Storage
     const deletedFromAzure = await azureBlobService.deleteFile(blobName);
@@ -57,15 +91,24 @@ export const deleteCourseFile = async (req: AuthRequest, res: Response): Promise
       }
     }
 
-    // Update course to remove file references
-    const updatedCourse = await courseModel.update(id, {
-      file_url: null,
-      file_name: null,
-    });
+    if (isLegacyFile) {
+      await courseModel.update(id, { file_url: null, file_name: null });
+    } else {
+      await courseModel.deleteCourseFile(courseFile.id);
+
+      // Update course with the latest file (if any)
+      const latestFile = await courseModel.getLatestCourseFile(id);
+      await courseModel.update(id, {
+        file_url: latestFile?.file_url || null,
+        file_name: latestFile?.file_name || null
+      });
+    }
+
+    const files = await courseModel.getCourseFiles(id);
 
     res.json({
       message: 'File deleted successfully',
-      course: updatedCourse
+      files: files.map(formatCourseFile)
     });
   } catch (error) {
     console.error('Delete file error:', error);
@@ -92,15 +135,21 @@ export const getCourseFiles = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // For now, return single file
-    // TODO: Extend to support multiple files in Phase 2
-    const files = course.file_name ? [
-      {
-        name: course.file_name,
-        url: course.file_url,
-        uploadedAt: course.updated_at,
-      }
-    ] : [];
+    const courseFiles = await courseModel.getCourseFiles(id);
+    let files = courseFiles.map(formatCourseFile);
+
+    // Fallback for legacy single-file storage
+    if (files.length === 0 && course.file_name && course.file_url) {
+      const legacyFileName = course.file_name ?? 'legacy-file';
+      const legacyFileUrl = course.file_url ?? '';
+      files = [{
+        id: legacyFileName,
+        name: legacyFileName,
+        url: legacyFileUrl,
+        uploadedAt: course.updated_at || new Date().toISOString(),
+        uploadedBy: course.instructor_id
+      }];
+    }
 
     res.json({ files });
   } catch (error) {
@@ -120,7 +169,7 @@ export const getFileInfo = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const { id, fileName } = req.params;
+    const { id, fileId } = req.params;
 
     const course = await courseModel.findById(id);
     if (!course) {
@@ -128,7 +177,25 @@ export const getFileInfo = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    if (course.file_name !== fileName) {
+    let courseFile = await courseModel.getCourseFileById(id, fileId);
+    let isLegacyFile = false;
+
+    if (!courseFile && course.file_name && course.file_name === fileId) {
+      isLegacyFile = true;
+      const legacyFileName = course.file_name ?? 'legacy-file';
+      const legacyFileUrl = course.file_url || '';
+      courseFile = {
+        id: legacyFileName,
+        course_id: id,
+        file_name: legacyFileName,
+        file_url: legacyFileUrl,
+        blob_name: extractBlobName(legacyFileUrl, legacyFileName),
+        uploaded_by: course.instructor_id,
+        uploaded_at: course.updated_at || new Date().toISOString()
+      };
+    }
+
+    if (!courseFile) {
       res.status(404).json({ error: 'File not found' });
       return;
     }
@@ -137,13 +204,14 @@ export const getFileInfo = async (req: AuthRequest, res: Response): Promise<void
     let fileSize = 0;
     let mimeType = 'application/octet-stream';
 
-    const localPath = path.join(process.cwd(), 'uploads', fileName);
+    const blobName = courseFile.blob_name || extractBlobName(courseFile.file_url, courseFile.file_name);
+    const localPath = path.join(process.cwd(), 'uploads', blobName);
     try {
       const stats = await fs.stat(localPath);
       fileSize = stats.size;
       
       // Determine mime type from extension
-      const ext = path.extname(fileName).toLowerCase();
+      const ext = path.extname(courseFile.file_name).toLowerCase();
       if (ext === '.pdf') mimeType = 'application/pdf';
       else if (ext === '.docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       else if (ext === '.doc') mimeType = 'application/msword';
@@ -152,12 +220,13 @@ export const getFileInfo = async (req: AuthRequest, res: Response): Promise<void
     }
 
     res.json({
-      name: course.file_name,
-      url: course.file_url,
+      name: courseFile.file_name,
+      url: courseFile.file_url,
       size: fileSize,
       sizeFormatted: formatFileSize(fileSize),
       mimeType,
-      uploadedAt: course.updated_at,
+      uploadedAt: courseFile.uploaded_at,
+      isLegacy: isLegacyFile
     });
   } catch (error) {
     console.error('Get file info error:', error);

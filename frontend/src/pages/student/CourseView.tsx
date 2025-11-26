@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
-import { coursesAPI } from '../../api/courses';
+import { coursesAPI, CourseFileSummary } from '../../api/courses';
 import { assessmentsAPI, Assessment } from '../../api/assessments';
 import { studentAssessmentsAPI, StudentAttempt } from '../../api/student-assessments';
 import { Course } from '../../types';
@@ -11,6 +11,7 @@ export const StudentCourseView = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [course, setCourse] = useState<Course | null>(null);
+  const [courseFiles, setCourseFiles] = useState<CourseFileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'syllabus' | 'materials' | 'assessments'>('syllabus');
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -23,6 +24,12 @@ export const StudentCourseView = () => {
     try {
       const data = await coursesAPI.getById(id);
       setCourse(data);
+      try {
+        const files = await coursesAPI.getFiles(id);
+        setCourseFiles(files);
+      } catch (error) {
+        console.error('Failed to load course files:', error);
+      }
     } catch (error) {
       console.error('Failed to load course:', error);
       alert('Failed to load course');
@@ -248,32 +255,40 @@ export const StudentCourseView = () => {
           {activeTab === 'materials' && (
             <div className="bg-white rounded-xl p-8 border border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Course Materials</h2>
-              {course.file_url ? (
+              {courseFiles.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                        </svg>
+                  {courseFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-5 h-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{file.name}</p>
+                          {file.uploadedAt && (
+                            <p className="text-sm text-gray-500">
+                              Uploaded {new Date(file.uploadedAt).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{course.file_name || 'Course Material'}</p>
-                        <p className="text-sm text-gray-500">Uploaded by instructor</p>
-                      </div>
+                      {file.url && (
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>Download</span>
+                        </a>
+                      )}
                     </div>
-                    <a
-                      href={course.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      <span>Download</span>
-                    </a>
-                  </div>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-8">

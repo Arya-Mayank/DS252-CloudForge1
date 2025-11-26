@@ -1,6 +1,14 @@
 import apiClient from './client';
 import { Course } from '../types';
 
+export interface CourseFileSummary {
+  id: string;
+  name: string;
+  url: string;
+  uploadedAt?: string;
+  uploadedBy?: string;
+}
+
 export const coursesAPI = {
   getAll: async (): Promise<Course[]> => {
     const response = await apiClient.get<{ courses: Course[] }>('/courses');
@@ -34,16 +42,16 @@ export const coursesAPI = {
     await apiClient.delete(`/courses/${id}`);
   },
 
-  uploadMaterial: async (id: string, file: File): Promise<Course> => {
+  uploadMaterial: async (id: string, file: File): Promise<{ course: Course; files: CourseFileSummary[] }> => {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await apiClient.post<{ course: Course }>(`/courses/${id}/upload`, formData, {
+    const response = await apiClient.post<{ course: Course; files: CourseFileSummary[] }>(`/courses/${id}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data.course;
+    return response.data;
   },
 
   enroll: async (id: string): Promise<void> => {
@@ -54,13 +62,13 @@ export const coursesAPI = {
     await apiClient.delete(`/courses/${id}/enroll`);
   },
 
-  deleteFile: async (courseId: string, fileName: string): Promise<any> => {
-    const response = await apiClient.delete(`/courses/${courseId}/files/${fileName}`);
-    return response.data;
+  deleteFile: async (courseId: string, fileId: string): Promise<CourseFileSummary[]> => {
+    const response = await apiClient.delete<{ files: CourseFileSummary[] }>(`/courses/${courseId}/files/${fileId}`);
+    return response.data.files;
   },
 
-  getFiles: async (courseId: string): Promise<any[]> => {
-    const response = await apiClient.get<{ files: any[] }>(`/courses/${courseId}/files`);
+  getFiles: async (courseId: string): Promise<CourseFileSummary[]> => {
+    const response = await apiClient.get<{ files: CourseFileSummary[] }>(`/courses/${courseId}/files`);
     return response.data.files;
   },
 
