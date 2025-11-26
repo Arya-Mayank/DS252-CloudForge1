@@ -9,6 +9,7 @@ export const InstructorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCourse, setNewCourse] = useState({ title: '', description: '' });
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCourses();
@@ -34,6 +35,30 @@ export const InstructorDashboard = () => {
       loadCourses();
     } catch (error) {
       console.error('Failed to create course:', error);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
+    const confirmed = window.confirm(
+      `Delete "${courseTitle}"?\n\nThis action removes the course, materials, and assessments for all students. This cannot be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingCourseId(courseId);
+      await coursesAPI.delete(courseId);
+      await loadCourses();
+    } catch (error: any) {
+      console.error('Failed to delete course:', error);
+      const errorMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        'Failed to delete course. Please try again.';
+      alert(errorMessage);
+    } finally {
+      setDeletingCourseId(null);
     }
   };
 
@@ -140,6 +165,17 @@ export const InstructorDashboard = () => {
                   >
                     Analytics
                   </Link>
+                  <button
+                    onClick={() => void handleDeleteCourse(course.id, course.title)}
+                    disabled={deletingCourseId === course.id}
+                    className={`flex-1 text-center text-sm border rounded-md px-3 py-2 transition-colors ${
+                      deletingCourseId === course.id
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'border-red-200 text-red-600 hover:bg-red-50'
+                    }`}
+                  >
+                    {deletingCourseId === course.id ? 'Deleting...' : 'Delete'}
+                  </button>
                 </div>
               </div>
             ))}
