@@ -9,6 +9,10 @@ interface LayoutProps {
 export const Layout = ({ children }: LayoutProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isInstructor = user?.role === 'instructor';
+  const containerClass = isInstructor
+    ? 'w-full px-4 sm:px-6 lg:px-10'
+    : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   const handleLogout = () => {
     logout();
@@ -19,7 +23,7 @@ export const Layout = ({ children }: LayoutProps) => {
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
       <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={containerClass}>
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-primary-600">DoodleOnMoodle</h1>
@@ -43,7 +47,7 @@ export const Layout = ({ children }: LayoutProps) => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`${containerClass} py-8`}>
         {children}
       </main>
     </div>

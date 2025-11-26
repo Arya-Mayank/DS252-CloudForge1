@@ -18,6 +18,7 @@ export const StudentCourseView = () => {
   const [loadingAssessments, setLoadingAssessments] = useState(false);
   const [studentAttempts, setStudentAttempts] = useState<{ [assessmentId: string]: StudentAttempt[] }>({});
   const [completedAssessmentId, setCompletedAssessmentId] = useState<string | null>(null);
+  const [leavingCourse, setLeavingCourse] = useState(false);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -88,6 +89,35 @@ export const StudentCourseView = () => {
     }
   }, [activeTab, loadAssessments]);
 
+  const handleLeaveCourse = async () => {
+    if (!course) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Leave "${course.title}"?\n\nYou will be unenrolled and lose access to its materials and assessments until you enroll again.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLeavingCourse(true);
+      await coursesAPI.unenroll(course.id);
+      alert('You have left the course.');
+      navigate('/student/dashboard');
+    } catch (error: any) {
+      console.error('Failed to leave course:', error);
+      const errorMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        'Failed to leave course. Please try again.';
+      alert(errorMessage);
+    } finally {
+      setLeavingCourse(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -133,19 +163,50 @@ export const StudentCourseView = () => {
           </button>
           
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h1 className="text-3xl font-bold text-gray-900">{course.title}</h1>
-            {course.description && course.description.length < 500 && (
-              <p className="text-gray-600 mt-2">{course.description}</p>
-            )}
-            
-            {isSyllabusPublished && (
-              <div className="mt-4 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Syllabus Available
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">{course.title}</h1>
+                {course.description && course.description.length < 500 && (
+                  <p className="text-gray-600 mt-2">{course.description}</p>
+                )}
               </div>
-            )}
+              <div className="flex flex-col items-start gap-2 md:items-end">
+                {isSyllabusPublished && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Syllabus Available
+                  </div>
+                )}
+                <button
+                  onClick={() => void handleLeaveCourse()}
+                  disabled={leavingCourse}
+                  className={`inline-flex items-center px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
+                    leavingCourse
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'border-red-200 text-red-600 hover:bg-red-50'
+                  }`}
+                >
+                  {leavingCourse ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Leaving...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Leave Course
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -234,12 +295,12 @@ export const StudentCourseView = () => {
                           {item.subtopics.map((subtopic: any, subIndex: number) => {
                             const subtopicLabel = typeof subtopic === 'string' ? subtopic : subtopic.subtopic;
                             return (
-                              <li key={subIndex} className="flex items-start space-x-3">
-                                <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
+                            <li key={subIndex} className="flex items-start space-x-3">
+                              <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
                                 <span className="text-gray-700">{subtopicLabel}</span>
-                              </li>
+                            </li>
                             );
                           })}
                         </ul>
@@ -259,13 +320,13 @@ export const StudentCourseView = () => {
                 <div className="space-y-4">
                   {courseFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div>
                           <p className="font-medium text-gray-900">{file.name}</p>
                           {file.uploadedAt && (
                             <p className="text-sm text-gray-500">
@@ -275,19 +336,19 @@ export const StudentCourseView = () => {
                         </div>
                       </div>
                       {file.url && (
-                        <a
+                    <a
                           href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          <span>Download</span>
-                        </a>
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      <span>Download</span>
+                    </a>
                       )}
-                    </div>
+                  </div>
                   ))}
                 </div>
               ) : (
@@ -513,4 +574,3 @@ export const StudentCourseView = () => {
     </Layout>
   );
 };
-

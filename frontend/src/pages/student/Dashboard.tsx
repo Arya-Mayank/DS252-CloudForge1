@@ -13,6 +13,7 @@ export const StudentDashboard = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'enrolled' | 'browse'>('enrolled');
+  const [leavingCourseId, setLeavingCourseId] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -58,6 +59,30 @@ export const StudentDashboard = () => {
       // Show more specific error message from backend
       const errorMessage = error?.response?.data?.error || error?.response?.data?.details || 'Failed to enroll in course';
       alert(errorMessage);
+    }
+  };
+
+  const handleUnenroll = async (courseId: string, courseTitle: string) => {
+    const confirmed = window.confirm(
+      `Leave "${courseTitle}"?\n\nYou will lose access to its materials and assessments until you enroll again.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLeavingCourseId(courseId);
+      await coursesAPI.unenroll(courseId);
+      await loadData();
+    } catch (error: any) {
+      console.error('Failed to unenroll:', error);
+      const errorMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        'Failed to leave course. Please try again.';
+      alert(errorMessage);
+    } finally {
+      setLeavingCourseId(null);
     }
   };
 
@@ -159,7 +184,11 @@ export const StudentDashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {enrolledCourses.map((course) => (
-                  <div key={course.id} className="card hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/student/course/${course.id}`)}>
+                  <div
+                    key={course.id}
+                    className="card hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => navigate(`/student/course/${course.id}`)}
+                  >
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       {course.title}
                     </h3>
@@ -176,15 +205,31 @@ export const StudentDashboard = () => {
                         </div>
                       )}
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/student/course/${course.id}`);
-                      }}
-                      className="w-full btn-primary text-sm"
-                    >
-                      View Course
-                    </button>
+                    <div className="flex space-x-3">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/student/course/${course.id}`);
+                        }}
+                        className="flex-1 btn-primary text-sm"
+                      >
+                        View Course
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleUnenroll(course.id, course.title);
+                        }}
+                        disabled={leavingCourseId === course.id}
+                        className={`flex-1 text-sm border rounded-md px-3 py-2 transition-colors ${
+                          leavingCourseId === course.id
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : 'border-red-200 text-red-600 hover:bg-red-50'
+                        }`}
+                      >
+                        {leavingCourseId === course.id ? 'Leaving...' : 'Leave Course'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -225,4 +270,3 @@ export const StudentDashboard = () => {
     </Layout>
   );
 };
-

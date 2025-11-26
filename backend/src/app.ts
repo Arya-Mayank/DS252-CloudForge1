@@ -76,7 +76,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   void _next;
   const normalizedError = err as { status?: number; message?: string; stack?: string };
   console.error('Global error handler:', normalizedError);
-
+  
   res.status(normalizedError.status || 500).json({
     error: normalizedError.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: normalizedError.stack })

@@ -288,7 +288,7 @@ export const CourseBuilder = () => {
         bloom_level: currentSubtopic.bloom_level
       };
     } else {
-      updated[topicIndex].subtopics[subtopicIndex] = newSubtopic;
+    updated[topicIndex].subtopics[subtopicIndex] = newSubtopic;
     }
     setEditingSyllabus(updated);
   };
@@ -680,8 +680,8 @@ export const CourseBuilder = () => {
                       </>
                     ) : (
                       <>
-                        Upload your course content such as textbooks, lecture notes, or reference materials.
-                        Our AI will analyze the content to create a comprehensive course structure.
+                    Upload your course content such as textbooks, lecture notes, or reference materials.
+                    Our AI will analyze the content to create a comprehensive course structure.
                       </>
                     )}
                   </p>
@@ -885,9 +885,9 @@ export const CourseBuilder = () => {
                       <div className="ml-6 flex flex-col space-y-2 flex-shrink-0">
                         {course?.is_published && course?.syllabus ? (
                           <>
-                            <button
+                      <button
                               onClick={() => handleGenerateSyllabus(true)}
-                              disabled={generating}
+                        disabled={generating}
                               className="bg-white text-blue-600 px-6 py-3 rounded-lg font-medium hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                             >
                               {generating ? (
@@ -929,21 +929,21 @@ export const CourseBuilder = () => {
                             onClick={() => handleGenerateSyllabus(false)}
                             disabled={generating}
                             className="bg-white text-primary-600 px-6 py-3 rounded-lg font-medium hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                          >
-                            {generating ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                                <span>Generating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                <span>Generate Syllabus</span>
-                              </>
-                            )}
-                          </button>
+                      >
+                        {generating ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Generate Syllabus</span>
+                          </>
+                        )}
+                      </button>
                         )}
                       </div>
                     </div>
@@ -1030,15 +1030,15 @@ export const CourseBuilder = () => {
                           <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-4 border-b border-primary-200">
                             <div className="flex items-center justify-between">
                               <div className="flex-1 flex items-center space-x-3 flex-wrap">
-                                {isEditMode ? (
+                              {isEditMode ? (
                                   <>
-                                    <input
-                                      type="text"
-                                      value={item.topic}
-                                      onChange={(e) => handleTopicChange(index, e.target.value)}
+                                <input
+                                  type="text"
+                                  value={item.topic}
+                                  onChange={(e) => handleTopicChange(index, e.target.value)}
                                       className="flex-1 min-w-[200px] text-lg font-semibold text-gray-900 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                      placeholder="Topic name"
-                                    />
+                                  placeholder="Topic name"
+                                />
                                     <select
                                       value={item.bloom_level || ''}
                                       onChange={(e) => handleTopicBloomLevelChange(index, e.target.value)}
@@ -1051,9 +1051,9 @@ export const CourseBuilder = () => {
                                       ))}
                                     </select>
                                   </>
-                                ) : (
+                              ) : (
                                   <>
-                                    <h3 className="text-lg font-semibold text-gray-900">{item.topic}</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">{item.topic}</h3>
                                     <select
                                       value={item.bloom_level || ''}
                                       onChange={(e) => {
@@ -1100,21 +1100,21 @@ export const CourseBuilder = () => {
                                 const subtopicBloomLevel = typeof subtopic === 'object' ? subtopic.bloom_level : undefined;
                                 
                                 return (
-                                  <li key={subIndex} className="flex items-start space-x-3">
-                                    {!isEditMode && (
-                                      <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
-                                    {isEditMode ? (
+                                <li key={subIndex} className="flex items-start space-x-3">
+                                  {!isEditMode && (
+                                    <svg className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                  {isEditMode ? (
                                       <div className="flex-1 flex items-center space-x-2 flex-wrap gap-2">
-                                        <input
-                                          type="text"
+                                      <input
+                                        type="text"
                                           value={subtopicText}
-                                          onChange={(e) => handleSubtopicChange(index, subIndex, e.target.value)}
+                                        onChange={(e) => handleSubtopicChange(index, subIndex, e.target.value)}
                                           className="flex-1 min-w-[200px] text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                          placeholder="Subtopic name"
-                                        />
+                                        placeholder="Subtopic name"
+                                      />
                                         <select
                                           value={subtopicBloomLevel || ''}
                                           onChange={(e) => handleSubtopicBloomLevelChange(index, subIndex, e.target.value)}
@@ -1126,17 +1126,17 @@ export const CourseBuilder = () => {
                                             </option>
                                           ))}
                                         </select>
-                                        <button
-                                          onClick={() => handleRemoveSubtopic(index, subIndex)}
+                                      <button
+                                        onClick={() => handleRemoveSubtopic(index, subIndex)}
                                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                                          title="Remove subtopic"
-                                        >
-                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                          </svg>
-                                        </button>
-                                      </div>
-                                    ) : (
+                                        title="Remove subtopic"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ) : (
                                       <div className="flex-1 flex items-center space-x-2 flex-wrap gap-2">
                                         <span className="text-gray-700">{subtopicText}</span>
                                         <select
@@ -1159,8 +1159,8 @@ export const CourseBuilder = () => {
                                           ))}
                                         </select>
                                       </div>
-                                    )}
-                                  </li>
+                                  )}
+                                </li>
                                 );
                               })}
                             </ul>

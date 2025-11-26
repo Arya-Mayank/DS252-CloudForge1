@@ -492,7 +492,7 @@ Return a JSON array with this structure:
           - You may include a few questions at adjacent levels if appropriate
           - Focus on the cognitive skills required for "${subtopic.bloom_level}" level`
           : '';
-
+        
         const prompt = `You are an expert assessment designer. Generate questions for a course assessment with Bloom's Taxonomy levels and difficulty distribution.
 
 ${levelGuidance}

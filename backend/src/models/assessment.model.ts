@@ -894,7 +894,7 @@ class AssessmentModel {
   private async evaluateSubjectiveAnswerInBackground(
     attemptId: string,
     questionId: string,
-    studentAnswer: string,
+    studentAnswer: string, 
     points: number
   ): Promise<void> {
     try {

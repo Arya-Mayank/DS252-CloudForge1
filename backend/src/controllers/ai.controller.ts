@@ -56,34 +56,34 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
 
       if (filesToParse.length > 0) {
         console.log(`📄 Extracting text from ${filesToParse.length} uploaded file(s)...`);
-        try {
+      try {
           let aggregatedText = '';
 
           for (const fileMeta of filesToParse) {
             const filePath = fileMeta.file_url.startsWith('http://localhost')
               ? fileMeta.file_url.replace('http://localhost:5000/', '')
               : fileMeta.file_url;
-            
+        
             const fileName = fileMeta.file_name || '';
-            let mimeType = 'application/pdf';
-            if (fileName.endsWith('.docx')) {
-              mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-            } else if (fileName.endsWith('.doc')) {
-              mimeType = 'application/msword';
-            }
-
+        let mimeType = 'application/pdf';
+        if (fileName.endsWith('.docx')) {
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (fileName.endsWith('.doc')) {
+          mimeType = 'application/msword';
+        }
+        
             const parsedText = await parseDocument(filePath, mimeType);
             aggregatedText += `\n\n${parsedText}`;
           }
 
           textToAnalyze = aggregatedText.trim();
           console.log(`✅ Extracted ${textToAnalyze.length} characters from uploaded files`);
-        } catch (error) {
+      } catch (error) {
           console.error('Failed to parse file(s):', error);
-          res.status(400).json({ 
+        res.status(400).json({ 
             error: 'Failed to extract text from uploaded file(s). Please try uploading again.' 
-          });
-          return;
+        });
+        return;
         }
       }
     }
