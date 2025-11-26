@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { analyticsAPI } from '../../api/analytics';
 import { coursesAPI } from '../../api/courses';
@@ -7,6 +7,7 @@ import { Analytics as AnalyticsType, Course } from '../../types';
 
 export const Analytics = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [course, setCourse] = useState<Course | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,18 @@ export const Analytics = () => {
   if (loading) {
     return (
       <Layout>
-        <div className="text-center py-12">Loading analytics...</div>
+        <div className="space-y-4">
+          <button
+            onClick={() => navigate('/instructor')}
+            className="flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </button>
+          <div className="text-center py-12">Loading analytics...</div>
+        </div>
       </Layout>
     );
   }
@@ -44,11 +56,22 @@ export const Analytics = () => {
   if (!analytics) {
     return (
       <Layout>
-        <div className="card text-center py-12">
-          <p className="text-gray-600">No analytics data available yet.</p>
-          <p className="text-sm text-gray-500 mt-2">
-            Create assessments and wait for students to complete them.
-          </p>
+        <div className="space-y-4">
+          <button
+            onClick={() => navigate('/instructor')}
+            className="flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </button>
+          <div className="card text-center py-12">
+            <p className="text-gray-600">No analytics data available yet.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Create assessments and wait for students to complete them.
+            </p>
+          </div>
         </div>
       </Layout>
     );
@@ -56,6 +79,17 @@ export const Analytics = () => {
 
   return (
     <Layout>
+      <div className="mb-4">
+        <button
+          onClick={() => navigate('/instructor')}
+          className="flex items-center text-gray-600 hover:text-gray-900"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Dashboard
+        </button>
+      </div>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Course Analytics</h1>
