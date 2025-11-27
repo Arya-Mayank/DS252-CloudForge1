@@ -38,12 +38,13 @@ class AzureBlobService {
    * TODO: Add your Azure Storage connection string to .env to enable real uploads
    */
   async uploadFile(filePath: string, originalName: string): Promise<UploadResult> {
+    const safeFileName = this.sanitizeFileName(originalName);
     const client = getBlobServiceClient();
     const containerName = getBlobContainerName();
 
     if (!client) {
       console.log('📁 Using MOCK file storage (local uploads/ directory)');
-      return this.mockUploadFile(filePath, originalName);
+      return this.mockUploadFile(filePath, safeFileName);
     }
 
     try {
@@ -54,7 +55,7 @@ class AzureBlobService {
 
       // Generate unique blob name
       const timestamp = Date.now();
-      const blobName = `${timestamp}-${originalName}`;
+      const blobName = `${timestamp}-${safeFileName}`;
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
       // Upload file
@@ -71,7 +72,7 @@ class AzureBlobService {
     } catch (error) {
       console.error('Error uploading to Azure Blob Storage:', error);
       console.log('Falling back to local storage...');
-      return this.mockUploadFile(filePath, originalName);
+      return this.mockUploadFile(filePath, safeFileName);
     }
   }
 
@@ -175,6 +176,14 @@ class AzureBlobService {
    */
   getMockStoragePath(): string {
     return this.mockStoragePath;
+  }
+
+  /**
+   * Sanitize user-provided file names to prevent path traversal
+   */
+  private sanitizeFileName(fileName: string): string {
+    const baseName = path.basename(fileName);
+    return baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 }
 
