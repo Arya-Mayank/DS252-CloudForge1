@@ -3,7 +3,10 @@ import { Course } from '../types';
 
 export interface CourseFileSummary {
   id: string;
-  name: string;
+  name?: string;
+  file_name?: string;
+  original_name?: string;
+  blob_name?: string;
   url: string;
   uploadedAt?: string;
   uploadedBy?: string;

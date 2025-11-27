@@ -1,4 +1,5 @@
-import { getBlobServiceClient, getBlobContainerName } from '../config/azure.config';
+import { getBlobServiceClient, getBlobContainerName, getStorageSharedKeyCredential } from '../config/azure.config';
+import { BlobSASPermissions, generateBlobSASQueryParameters } from '@azure/storage-blob';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -80,6 +81,7 @@ class AzureBlobService {
   async getFileUrl(blobName: string): Promise<string> {
     const client = getBlobServiceClient();
     const containerName = getBlobContainerName();
+    const sharedKeyCredential = getStorageSharedKeyCredential();
 
     if (!client) {
       return `http://localhost:5000/uploads/${blobName}`;
@@ -87,7 +89,23 @@ class AzureBlobService {
 
     try {
       const containerClient = client.getContainerClient(containerName);
-      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+      const blockBlobClient = containerClient.getBlobClient(blobName);
+      
+      if (sharedKeyCredential) {
+        const expiresOn = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+        const sasToken = generateBlobSASQueryParameters(
+          {
+            containerName,
+            blobName,
+            permissions: BlobSASPermissions.parse('r'),
+            expiresOn
+          },
+          sharedKeyCredential
+        ).toString();
+
+        return `${blockBlobClient.url}?${sasToken}`;
+      }
+
       return blockBlobClient.url;
     } catch (error) {
       console.error('Error getting file URL:', error);

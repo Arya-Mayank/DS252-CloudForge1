@@ -1,5 +1,5 @@
 import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
-import { BlobServiceClient } from '@azure/storage-blob';
+import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import { SearchClient, AzureKeyCredential as SearchKeyCredential } from '@azure/search-documents';
 
 /**
@@ -18,6 +18,8 @@ import { SearchClient, AzureKeyCredential as SearchKeyCredential } from '@azure/
  */
 
 const MOCK_MODE = !process.env.AZURE_OPENAI_ENDPOINT || !process.env.AZURE_OPENAI_KEY;
+const DEFAULT_API_VERSION = '2024-12-01-preview';
+let sharedKeyCredential: StorageSharedKeyCredential | null = null;
 
 export const getOpenAIClient = (): OpenAIClient | null => {
   if (MOCK_MODE) {
@@ -28,7 +30,8 @@ export const getOpenAIClient = (): OpenAIClient | null => {
   try {
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT!;
     const apiKey = process.env.AZURE_OPENAI_KEY!;
-    return new OpenAIClient(endpoint, new AzureKeyCredential(apiKey));
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION || DEFAULT_API_VERSION;
+    return new OpenAIClient(endpoint, new AzureKeyCredential(apiKey), { apiVersion });
   } catch (error) {
     console.error('Failed to initialize Azure OpenAI client:', error);
     return null;
@@ -70,6 +73,40 @@ export const getBlobServiceClient = (): BlobServiceClient | null => {
 
 export const getBlobContainerName = (): string => {
   return process.env.AZURE_STORAGE_CONTAINER || 'course-files';
+};
+
+const parseStorageAccountInfo = () => {
+  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+  if (!connectionString) {
+    return null;
+  }
+
+  const accountNameMatch = connectionString.match(/AccountName=([^;]+);?/i);
+  const accountKeyMatch = connectionString.match(/AccountKey=([^;]+);?/i);
+
+  if (!accountNameMatch || !accountKeyMatch) {
+    console.warn('⚠️  Unable to parse storage account credentials from connection string.');
+    return null;
+  }
+
+  return {
+    accountName: accountNameMatch[1],
+    accountKey: accountKeyMatch[1]
+  };
+};
+
+export const getStorageSharedKeyCredential = (): StorageSharedKeyCredential | null => {
+  if (sharedKeyCredential) {
+    return sharedKeyCredential;
+  }
+
+  const accountInfo = parseStorageAccountInfo();
+  if (!accountInfo) {
+    return null;
+  }
+
+  sharedKeyCredential = new StorageSharedKeyCredential(accountInfo.accountName, accountInfo.accountKey);
+  return sharedKeyCredential;
 };
 
 /**

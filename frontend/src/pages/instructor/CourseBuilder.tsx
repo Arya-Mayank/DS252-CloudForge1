@@ -459,6 +459,10 @@ export const CourseBuilder = () => {
     window.alert('Student roster management is coming soon. For now, manage enrollments directly via Supabase or contact support.');
   }, []);
 
+  const getFileDisplayName = (file: CourseFileSummary) => {
+    return file.name || file.file_name || file.original_name || file.blob_name || 'Uploaded material';
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -858,7 +862,7 @@ export const CourseBuilder = () => {
                                 </svg>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 truncate">{file.name}</p>
+                                <p className="font-medium text-gray-900 truncate">{getFileDisplayName(file)}</p>
                                 <div className="flex items-center space-x-4 mt-1">
                                   <span className="text-sm text-green-600 flex items-center">
                                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -885,7 +889,7 @@ export const CourseBuilder = () => {
                             </div>
                             
                             <button
-                              onClick={() => handleDeleteFile(file.id, file.name)}
+                              onClick={() => handleDeleteFile(file.id, getFileDisplayName(file))}
                               disabled={deletingFile === file.id}
                               className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                               title="Delete file"
