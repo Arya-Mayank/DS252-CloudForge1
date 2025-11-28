@@ -1,151 +1,152 @@
-# DoodleOnMoodle LMS
+# DoodleOnMoodle LMS – Production (Azure Cloud)
 
-AI-assisted learning management system for instructors and students. Professors can upload material, generate and update a Bloom’s taxonomy–aligned syllabus, create adaptive assessments, and review student performance. Students receive adaptive question delivery and rapid feedback with subjective answers evaluated asynchronously.
-
-## Feature Highlights
-
-- Instructor and student portals with JWT-based authentication.
-- Intelligent syllabus generation and updates that respect instructor-selected Bloom’s taxonomy levels.
-- AI-authored MCQ, MSQ, and subjective questions with UG/PG difficulty choices.
-- Adaptive assessment engine that adjusts question difficulty/topic based on student performance.
-- Background evaluation for subjective answers and quick grading of objective questions.
-- Supabase-backed persistence with optional Azure integrations for AI, blob storage, and search (mock fallbacks available).
-
-## Tech Stack
-
-| Layer      | Technologies |
-|------------|--------------|
-| Frontend   | React 18, TypeScript, Vite, TailwindCSS, React Router, React Query |
-| Backend    | Node.js, Express, TypeScript, Supabase (PostgreSQL), express-validator, multer |
-| AI         | Azure OpenAI (mock mode supported), optional Azure Cognitive Search |
-| Storage    | Azure Blob Storage (optional, mock mode supported) |
-
-## Requirements
-
-- Node.js 18+
-- npm 9+
-- Supabase project (or compatible PostgreSQL instance)
-- Azure credentials (optional — mocked when missing)
-
-## Quick Start (5 minutes)
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Arya-Mayank/DS252-CloudForge1.git
-   cd DS252-CloudForge1
-   ```
-
-2. **Install dependencies** (run both commands)
-   ```bash
-   cd backend && npm install
-   cd ../frontend && npm install
-   ```
-
-3. **Environment ready out-of-the-box**
-   - `backend/.env` and `frontend/.env` are already committed with course Supabase + Azure credentials.
-   - No additional configuration is required unless you want to override them locally.
-   - Treat these secrets as private—anyone with repo access can modify shared data and incur Azure usage.
-
-4. **Start the servers** (use two terminal windows or tabs)
-   ```bash
-   # Backend
-   cd backend
-   npm run dev
-
-   # Frontend
-   cd frontend
-   npm run dev
-   ```
-   Visit `http://localhost:5173` (Vite dev server). The backend listens on `http://localhost:5000` and is proxied automatically.
-
-5. **Log in with seeded accounts**
-   - Instructor: `sakshi@example.com` / `sakshi123`
-   - Student: `mayank@example.com` / `mayank123`
-
-### Database Setup
-
-1. Follow `database/README.md` for Supabase provisioning and run the SQL scripts in the `database/` folder (at minimum `schema.sql` plus Bloom/assessment migrations).
-2. Ensure storage buckets are created if using Azure Blob Storage; otherwise the backend uses local `backend/uploads/` (ignored by git).
-
-### Run the App
-
-```bash
-# In one terminal (backend)
-cd backend
-npm run dev
-
-# In another terminal (frontend)
-cd frontend
-npm run dev
-```
-
-Access the UI at `http://localhost:5173`. The backend listens on `http://localhost:5000` by default and proxies API requests from Vite.
-
-### Quality Checks
-
-```bash
-# Backend
-cd backend
-npm run lint
-npm run build
-
-# Frontend
-cd frontend
-npm run lint
-npm run build
-```
-
-All linting and TypeScript builds run clean with the current configuration.
-
-## Deployment Notes
-
-- **Backend**: Build with `npm run build` and deploy the generated `dist/` (e.g., Azure App Service). Provide `.env` values via your host’s secret manager.
-- **Frontend**: Run `npm run build` and deploy the `dist/` folder to Vercel, Netlify, or any static host. Set `VITE_API_URL` to the deployed API endpoint.
-- **Supabase**: Load schema migrations and configure RLS policies suitable for production. The included schema enables RLS; adjust policies as needed.
-- **Azure Services (optional)**: Provide credentials to activate real AI, blob storage, and search. Without them the system logs warnings and falls back to mock implementations so developers can experiment locally.
-
-## Repository Structure
-
-```
-DS252-CloudForge1/
-├── backend/
-│   ├── src/
-│   │   ├── config/          # Azure, JWT, Supabase configuration helpers
-│   │   ├── controllers/     # Express route handlers
-│   │   ├── middleware/      # Auth middleware and validators
-│   │   ├── models/          # Supabase data access logic
-│   │   ├── routes/          # API route definitions
-│   │   └── services/        # Azure OpenAI/Search/Blob service wrappers
-│   └── uploads/             # Local storage bucket (git keeps folder only)
-├── frontend/
-│   ├── src/
-│   │   ├── api/             # Axios clients for backend endpoints
-│   │   ├── components/      # Shared UI building blocks
-│   │   ├── pages/           # Instructor & student route entries
-│   │   ├── hooks/           # Auth/context hooks
-│   │   ├── styles/          # Tailwind entrypoints
-│   │   └── types/           # Shared TypeScript interfaces
-├── database/                # SQL schema and migration scripts
-└── docs/                    # Supplemental product documentation
-```
-
-## Troubleshooting
-
-- **Azure credentials missing**: backend runs in mock mode. Add keys to enable real AI generation.
-- **Supabase connection failures**: verify `SUPABASE_URL` and `SUPABASE_KEY`, and ensure the schema from `database/` has been applied.
-- **Uploads directory missing**: the repository ships with `backend/uploads/.gitkeep`; ensure your deployment target preserves the folder or configure Azure Blob Storage.
-- **Frontend cannot reach API**: confirm `VITE_API_URL` points to the backend (Vite dev server proxies `/api` to `http://localhost:5000`).
-- **Shared environment files**: the committed `.env` files grant access to the course’s Supabase project and Azure OpenAI deployment. Do not expose the repository publicly.
-
-## Seed Accounts
-
-Use the following accounts to explore the system without creating new users:
-
-| Role | Email | Password |
-|------|-------|----------|
-| Instructor | `sakshi@example.com` | `sakshi123` |
-| Student | `mayank@example.com` | `mayank123` |
+This branch (`prod`) captures all the work required to run DoodleOnMoodle as a cloud-native system on the Azure stack. The main branch documents the local development setup; this README explains how we hardened the app for production, the Azure services in use, and the deployment flow.
 
 ---
 
-Maintained for DS252 adaptive learning research. Contributions and issue reports are welcome.
+## 1. Stabilize the codebase
+
+- Improved instructor UX (unenroll, Quick Actions) and added safe file-name handling for uploads.
+- Enabled remote file parsing so Azure Blob–hosted materials can feed syllabus generation.
+- Added `backend/.env.example` and updated `.gitignore` so secrets never enter git history.
+
+## 2. Prepare Azure infrastructure
+
+- **Azure Blob Storage** (`ds252` account, `course-files` container) stores course materials. Files get SAS URLs so students and instructors can download from anywhere.
+- **Supabase** remains the database. We applied `database/schema.sql` and disabled RLS (or used the service-role key) so the API can insert users.
+- **Azure OpenAI** powers syllabus and assessment generation; credentials are injected via App Service settings.
+- **Azure Container Registry (ACR)** (`ds252acr`) hosts the backend Docker image.
+- Filed quota requests to enable **Linux App Service** (B1) in East US (default quota was 0).
+
+## 3. Containerize & deploy backend
+
+1. Build the backend container:
+   ```bash
+   cd backend
+   docker build -t lms-backend .
+   docker tag lms-backend ds252acr.azurecr.io/lms-backend:prod
+   docker push ds252acr.azurecr.io/lms-backend:prod
+   ```
+2. Create the App Service plan and web app:
+   ```bash
+   az appservice plan create --name ds252-plan --resource-group ds252-prod-rg --sku B1 --is-linux
+   az webapp create --name ds252-backend-api --resource-group ds252-prod-rg \
+     --plan ds252-plan \
+     --deployment-container-image-name ds252acr.azurecr.io/lms-backend:prod
+   ```
+3. Configure container registry credentials and environment variables:
+   ```bash
+   az acr credential show --name ds252acr  # copy username/password
+
+   az webapp config container set \
+     --name ds252-backend-api \
+     --resource-group ds252-prod-rg \
+     --docker-custom-image-name ds252acr.azurecr.io/lms-backend:prod \
+     --docker-registry-server-url https://ds252acr.azurecr.io \
+     --docker-registry-server-user <acr-user> \
+     --docker-registry-server-password <acr-pass>
+
+   az webapp config appsettings set \
+     --name ds252-backend-api \
+     --resource-group ds252-prod-rg \
+     --settings \
+       "SUPABASE_URL=https://aqbupmzmwtdqpxwcmfcn.supabase.co" \
+       "SUPABASE_KEY=<supabase-service-role-key>" \
+       "JWT_SECRET=<prod-secret>" \
+       "FRONTEND_URL=https://polite-coast-0fbcbef1e.3.azurestaticapps.net" \
+       "AZURE_OPENAI_ENDPOINT=https://ds252-project-resource.cognitiveservices.azure.com/" \
+       "AZURE_OPENAI_KEY=<openai-key>" \
+       "AZURE_OPENAI_DEPLOYMENT=gpt-5-mini" \
+       "AZURE_OPENAI_API_VERSION=2024-12-01-preview" \
+       "AZURE_STORAGE_CONNECTION_STRING=<connection-string>" \
+       "AZURE_STORAGE_CONTAINER=course-files" \
+       "AZURE_SEARCH_ENDPOINT=" \
+       "AZURE_SEARCH_KEY=" \
+       "AZURE_SEARCH_INDEX=course-embeddings"
+   ```
+
+4. Enable log streaming for troubleshooting:
+   ```bash
+   az webapp log config --name ds252-backend-api --resource-group ds252-prod-rg \
+     --application-logging filesystem --level Information
+   az webapp log tail --name ds252-backend-api --resource-group ds252-prod-rg
+   ```
+
+## 4. Deploy frontend
+
+1. Set the production API URL (`frontend/.env.production`):
+   ```
+   VITE_API_URL=https://ds252-backend-api.azurewebsites.net/api
+   ```
+2. Build and deploy to Azure Static Web Apps:
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   swa login
+   swa deploy ./dist --app-name ds252-frontend --env production
+   ```
+3. Update the backend `FRONTEND_URL` setting whenever the static app domain changes to keep CORS aligned.
+
+## 5. End-to-end verification
+
+- Hit `https://ds252-backend-api.azurewebsites.net/health` to confirm API health.
+- Log into the static site `https://polite-coast-0fbcbef1e.3.azurestaticapps.net`, upload materials, generate syllabi, and verify Azure Blob downloads via SAS links.
+- Confirm Supabase functions (login, OTP) and AI workflows operate against the production resources.
+
+---
+
+## Azure services in play
+
+- **Azure Blob Storage** – durable storage for course materials; SAS URLs allow secure downloads.
+- **Azure Container Registry** – stores backend Docker images for App Service.
+- **Azure App Service (Linux)** – runs the Node/Express API with auto-scaling and built-in monitoring.
+- **Azure Static Web Apps** – globally caches the React frontend with HTTPS and CDN delivery.
+- **Azure OpenAI** – generates syllabi and assessments via the GPT-5-mini deployment.
+- **Azure CLI & Static Web Apps CLI** – used for scripting, deployment, and secret management.
+
+## Key challenges & solutions
+
+- **Supabase schema/RLS** – ran `database/schema.sql`, disabled RLS (or used service-role key) so the backend can insert records.
+- **Secrets in git** – removed `.env` files from the repo and added `.env.example` for safe sharing.
+- **Blob downloads** – added HTTP fetching + SAS generation so PDF parsing works in Azure rather than relying on local `uploads/`.
+- **CORS** – update `FRONTEND_URL` each time the frontend domain changes to prevent blocked requests.
+- **Quota limits** – requested Basic Linux vCPUs to create the App Service plan (default quota was 0).
+
+---
+
+## Live endpoints
+
+- **Backend API:** `https://ds252-backend-api.azurewebsites.net`
+- **Frontend:** `https://polite-coast-0fbcbef1e.3.azurestaticapps.net`
+- **Storage & AI:** Azure Blob Storage (`ds252` account) + Azure OpenAI (ds252-project-resource)
+- **Database:** Supabase (`aqbupmzmwtdqpxwcmfcn` project)
+
+---
+
+## Deployment commands reference
+
+```bash
+# Backend container
+docker build -t lms-backend .
+docker tag lms-backend ds252acr.azurecr.io/lms-backend:prod
+docker push ds252acr.azurecr.io/lms-backend:prod
+
+# Configure Web App container
+az webapp config container set \
+  --name ds252-backend-api \
+  --resource-group ds252-prod-rg \
+  --docker-custom-image-name ds252acr.azurecr.io/lms-backend:prod \
+  --docker-registry-server-url https://ds252acr.azurecr.io \
+  --docker-registry-server-user <acr-user> \
+  --docker-registry-server-password <acr-pass>
+
+# Deploy frontend
+cd frontend
+npm run build
+swa deploy ./dist --app-name ds252-frontend --env production
+```
+
+---
+
+The `prod` branch demonstrates the journey from a local prototype to a production-grade, cloud-native LMS with containerization, secure secret handling, blob-backed file storage, Azure OpenAI integration, and cross-origin security hardening. Use this as the reference for maintaining or replicating the live deployment. 
