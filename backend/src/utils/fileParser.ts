@@ -1,13 +1,15 @@
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { promises as fs } from 'fs';
+import http from 'http';
+import https from 'https';
 
 /**
  * Parse PDF files and extract text content
  */
 export const parsePDF = async (filePath: string): Promise<string> => {
   try {
-    const dataBuffer = await fs.readFile(filePath);
+    const dataBuffer = await getFileBuffer(filePath);
     const data = await pdfParse(dataBuffer);
     return data.text;
   } catch (error) {
@@ -21,7 +23,8 @@ export const parsePDF = async (filePath: string): Promise<string> => {
  */
 export const parseDOCX = async (filePath: string): Promise<string> => {
   try {
-    const result = await mammoth.extractRawText({ path: filePath });
+    const dataBuffer = await getFileBuffer(filePath);
+    const result = await mammoth.extractRawText({ buffer: dataBuffer });
     return result.value;
   } catch (error) {
     console.error('Error parsing DOCX:', error);
@@ -68,5 +71,30 @@ export const chunkText = (text: string, chunkSize: number = 1000): string[] => {
   }
 
   return chunks;
+};
+
+const getFileBuffer = async (filePath: string): Promise<Buffer> => {
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    return downloadRemoteFile(filePath);
+  }
+  return fs.readFile(filePath);
+};
+
+const downloadRemoteFile = (url: string): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https://') ? https : http;
+    client
+      .get(url, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`Failed to download file. Status code: ${res.statusCode}`));
+          return;
+        }
+
+        const data: Uint8Array[] = [];
+        res.on('data', (chunk) => data.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(data)));
+      })
+      .on('error', (error) => reject(error));
+  });
 };
 

@@ -4,6 +4,8 @@ import azureOpenAIService from '../services/azure-openai.service';
 import azureSearchService from '../services/azure-search.service';
 import courseModel from '../models/course.model';
 import { parseDocument, chunkText } from '../utils/fileParser';
+import azureBlobService from '../services/azure-blob.service';
+import path from 'path';
 
 /**
  * Generate syllabus from uploaded document
@@ -60,9 +62,7 @@ export const generateSyllabus = async (req: AuthRequest, res: Response): Promise
           let aggregatedText = '';
 
           for (const fileMeta of filesToParse) {
-            const filePath = fileMeta.file_url.startsWith('http://localhost')
-              ? fileMeta.file_url.replace('http://localhost:5000/', '')
-              : fileMeta.file_url;
+            const filePath = await resolveFilePath(fileMeta.file_url, fileMeta.blob_name);
         
             const fileName = fileMeta.file_name || '';
         let mimeType = 'application/pdf';
@@ -291,3 +291,23 @@ export const searchCourseContent = async (req: AuthRequest, res: Response): Prom
   }
 };
 
+const resolveFilePath = async (fileUrl: string, blobName?: string): Promise<string> => {
+  if (fileUrl?.startsWith('http://localhost')) {
+    return fileUrl.replace('http://localhost:5000/', '');
+  }
+
+  if (fileUrl?.startsWith('http://') || fileUrl?.startsWith('https://')) {
+    return fileUrl;
+  }
+
+  if (blobName) {
+    const url = await azureBlobService.getFileUrl(blobName);
+    if (url) {
+      return url;
+    }
+  }
+
+  return fileUrl.startsWith('/')
+    ? path.join(process.cwd(), fileUrl)
+    : path.join(process.cwd(), fileUrl || '');
+};
