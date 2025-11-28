@@ -2,6 +2,8 @@
 
 AI-assisted learning management system for instructors and students. Professors can upload material, generate and update a Bloom’s taxonomy–aligned syllabus, create adaptive assessments, and review student performance. Students receive adaptive question delivery and rapid feedback with subjective answers evaluated asynchronously.
 
+> Project live at: https://polite-coast-0fbcbef1e.3.azurestaticapps.net/login
+
 ## Feature Highlights
 
 - Instructor and student portals with JWT-based authentication.
